@@ -1,1 +1,9 @@
 .superpowers/
+__pycache__/
+*.egg-info/
+.env
+output/
+projects/
+*.pyc
+dist/
+build/
