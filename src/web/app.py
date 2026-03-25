@@ -557,6 +557,21 @@ def _sync_modeling_queue(project):
     project.modeling_queue = [r.id for r in all_reqs]
 
 
+def _detect_orphaned_links(project):
+    """Find links whose source and target both don't exist in requirements or elements."""
+    req_ids = {r.id for r in project.requirements}
+    element_ids = set()
+    for layer_data in project.layers.values():
+        if isinstance(layer_data, dict):
+            for collection in layer_data.values():
+                if isinstance(collection, list):
+                    for elem in collection:
+                        if isinstance(elem, dict) and "id" in elem:
+                            element_ids.add(elem["id"])
+    valid_ids = req_ids | element_ids
+    return [l for l in project.links if l.source not in valid_ids and l.target not in valid_ids]
+
+
 # ---------------------------------------------------------------------------
 # Decompose routes
 # ---------------------------------------------------------------------------
