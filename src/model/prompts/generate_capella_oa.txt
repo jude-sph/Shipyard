@@ -1,0 +1,166 @@
+You are generating Arcadia Operational Analysis (OA) elements for the Capella modeling tool.
+
+PURPOSE OF THIS STAGE:
+The Operational Analysis models the real-world operational context BEFORE any system solution is defined. It focuses on the operational mission: who the stakeholders are, what they need to achieve, how they collaborate, and what information they exchange. You are modelling the mission environment and its actors -- NOT the system-of-interest itself.
+
+ARCADIA ELEMENT DEFINITIONS:
+
+1. Operational Entities/Actors (entities)
+   An operational entity is a real-world entity or stakeholder involved in a mission. An actor is a (usually human) non-decomposable role within an entity.
+   Fields: id, name, type (always "OperationalEntity"), actors (list of actor name strings within the entity)
+
+2. Operational Capabilities (capabilities)
+   A capability is the ability of operational entities to collectively provide a service that supports the achievement of a mission.
+   Fields: id, name, involved_entities (list of entity IDs that participate in realizing this capability)
+
+3. Operational Scenarios (scenarios)
+   An operational scenario is a time-ordered set of interactions between operational activities performed by operational entities to fulfil an Operational Capability.
+   Fields: id, name, steps (list of step objects)
+   Each step: from_entity (entity ID), to_entity (entity ID), message (string), sequence (integer)
+
+4. Operational Activities (activities)
+   An operational activity is an action, operation, or service fulfilled by an operational entity, contributing to a mission.
+   Fields: id, name, entity (single entity ID that owns this activity), inputs (list of input name strings), outputs (list of output name strings)
+
+5. Operational Processes (operational_processes)
+   An operational process is a logical organization of Interactions and Activities to fulfil an Operational Capability.
+   Fields: id, name, capability_ref (single capability ID), activity_refs (list of activity IDs in this process)
+
+6. Operational Interactions (operational_interactions)
+   Operational interactions are conveyed through (allocated to) communication links between operational entities or actors.
+   Fields: id, name, source_entity (entity ID), target_entity (entity ID), exchanged_items (list of interaction item IDs)
+
+7. Communication Means (communication_means)
+   A communication mean is a medium enabling interactions between entities and actors.
+   Fields: id, name, source_entity (entity ID), target_entity (entity ID)
+
+8. Operational Data (operational_data)
+   Elements of interactions or communications between entities or actors. Data can be referenced and grouped into exchange items.
+   Fields: id, name, description (string)
+
+9. Interaction Items (interaction_items)
+   A specified interaction contents describes what is expected to be exchanged by the entities or actors, and activities allocated to each of them.
+   Fields: id, name, description (string)
+
+10. Operational Modes & States (modes_and_states)
+    An automaton describes how modes and states are linked by transitions; it is linked to the appropriate object (actor, entity). Functions or operational activities available in this mode or state can be described.
+    Fields: id, name, type ("Mode" or "State"), transitions (list of objects with "from", "to", "trigger" keys)
+
+---
+
+INPUT
+
+The following requirements are provided as a JSON array:
+
+{requirements}
+{existing_elements}
+---
+
+OUTPUT SCHEMA
+
+Return a JSON object with ALL 10 collections. Use this exact structure:
+
+{{
+  "entities": [
+    {{
+      "id": "OE-001",
+      "name": "Example Entity",
+      "type": "OperationalEntity",
+      "actors": ["Actor Name"]
+    }}
+  ],
+  "capabilities": [
+    {{
+      "id": "OC-001",
+      "name": "Example Capability",
+      "involved_entities": ["OE-001"]
+    }}
+  ],
+  "scenarios": [
+    {{
+      "id": "OS-001",
+      "name": "Example Scenario",
+      "steps": [
+        {{
+          "from_entity": "OE-001",
+          "to_entity": "OE-002",
+          "message": "Tasking Order",
+          "sequence": 1
+        }}
+      ]
+    }}
+  ],
+  "activities": [
+    {{
+      "id": "OA-001",
+      "name": "Example Activity",
+      "entity": "OE-001",
+      "inputs": ["Input Data"],
+      "outputs": ["Output Data"]
+    }}
+  ],
+  "operational_processes": [
+    {{
+      "id": "OP-001",
+      "name": "Example Process",
+      "capability_ref": "OC-001",
+      "activity_refs": ["OA-001"]
+    }}
+  ],
+  "operational_interactions": [
+    {{
+      "id": "OI-001",
+      "name": "Example Interaction",
+      "source_entity": "OE-001",
+      "target_entity": "OE-002",
+      "exchanged_items": ["II-001"]
+    }}
+  ],
+  "communication_means": [
+    {{
+      "id": "CM-001",
+      "name": "Example Comm Link",
+      "source_entity": "OE-001",
+      "target_entity": "OE-002"
+    }}
+  ],
+  "operational_data": [
+    {{
+      "id": "OD-001",
+      "name": "Example Data",
+      "description": "Data element description"
+    }}
+  ],
+  "interaction_items": [
+    {{
+      "id": "II-001",
+      "name": "Example Exchanged Item",
+      "description": "What is exchanged"
+    }}
+  ],
+  "modes_and_states": [
+    {{
+      "id": "OMS-001",
+      "name": "Example State",
+      "type": "State",
+      "transitions": [{{"from": "OMS-001", "to": "OMS-002", "trigger": "Event Name"}}]
+    }}
+  ]
+}}
+
+---
+
+OUTPUT
+
+Generate a JSON object matching the schema above, derived from the provided requirements. Return ONLY the JSON object with no additional explanation, preamble, or markdown formatting.
+
+Rules:
+1. Use exact Arcadia terminology as defined above. Do NOT invent generic systems engineering terms.
+2. Generate unique IDs with these prefixes: OE- (entities), OC- (capabilities), OS- (scenarios), OA- (activities), OP- (processes), OI- (interactions), CM- (communication means), OD- (data), II- (interaction items), OMS- (modes/states). Use zero-padded three-digit suffixes (e.g., OE-001).
+3. Every entity referenced in capabilities, scenarios, activities, interactions, or communication means MUST exist in the entities list.
+4. Every activity referenced in operational_processes MUST exist in the activities list.
+5. Every interaction item referenced in operational_interactions MUST exist in the interaction_items list.
+6. If existing elements are provided, reference them by ID. Do NOT recreate existing elements.
+7. Derive all elements directly from the provided requirements. Include at least one scenario showing end-to-end operational flow.
+8. All 10 collections must be present in the output. Use empty lists for collections that have no applicable elements.
+9. Output ONLY valid JSON.

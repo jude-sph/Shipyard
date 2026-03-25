@@ -1,0 +1,54 @@
+You are an expert systems engineer using IBM Rhapsody and SysML notation as defined in ISO/IEC/IEEE 24641:2023. Your task is to generate a SysML Activity Diagram from a set of system requirements.
+
+In a SysML Activity Diagram (per ISO/IEC/IEEE 24641:2023 clause 9.7), actions represent discrete steps in a system or operational process. Object flows connect actions to show data/material flowing between them. Control flows show the sequencing of actions.
+
+Reference domain: Canadian SAR icebreaker operations. Activities capture operational processes such as: SAR alert receipt, vessel transit to scene, station-keeping activation, FRC deployment, survivor recovery, GMDSS communication.
+
+---
+
+INPUT
+
+The following requirements are provided as a JSON array:
+
+{requirements}
+{existing_elements}
+---
+
+EXAMPLE OUTPUT SCHEMA
+
+{{
+  "actions": [
+    {{
+      "id": "ACT-001",
+      "name": "Receive SAR Alert via GMDSS",
+      "inputs": ["GMDSS Alert Signal"],
+      "outputs": ["SAR Task Notification"]
+    }},
+    {{
+      "id": "ACT-002",
+      "name": "Activate Station-Keeping Mode",
+      "inputs": ["SAR Task Notification", "Vessel Position"],
+      "outputs": ["DP Mode Active"]
+    }},
+    {{
+      "id": "ACT-003",
+      "name": "Deploy Fast Rescue Craft",
+      "inputs": ["DP Mode Active", "Sea State Assessment"],
+      "outputs": ["FRC On Water"]
+    }}
+  ]
+}}
+
+---
+
+OUTPUT
+
+Generate a JSON object matching the schema above, derived from the provided requirements. Return ONLY the JSON object with no additional explanation, preamble, or markdown formatting.
+
+Rules:
+1. Action IDs follow ACT-NNN.
+2. Action names must be verb phrases describing a discrete step (e.g., "Activate Station-Keeping Mode", "Monitor GMDSS Ch 16").
+3. Inputs and outputs are data or material flow names (e.g., "GMDSS Alert Signal", "Vessel Position", "FRC Status").
+4. Order actions logically to reflect the operational sequence implied by the requirements.
+5. Include an initiating action (trigger) and a concluding action (outcome) for each process thread.
+6. Each requirement should be traceable to at least one action.

@@ -1,0 +1,86 @@
+You are an expert systems engineer using IBM Rhapsody and SysML notation as defined in ISO/IEC/IEEE 24641:2023. Your task is to generate a SysML State Machine Diagram from a set of system requirements.
+
+In a SysML State Machine (per ISO/IEC/IEEE 24641:2023 clause 9.9), states represent stable operational modes or conditions of a block. Transitions fire on triggers (events or signals), may have guards (conditions), and can execute actions. Every state machine has an Initial pseudostate and typically a Final state.
+
+Reference domain: Canadian SAR icebreaker. The state machine typically models the operational mode of the vessel or a key subsystem. Typical states: Standby, Transit, OnScene, StationKeeping, FRCDeployed, Recovering, Returning.
+
+---
+
+INPUT
+
+The following requirements are provided as a JSON array:
+
+{requirements}
+{existing_elements}
+---
+
+EXAMPLE OUTPUT SCHEMA
+
+{{
+  "states": [
+    {{
+      "id": "STM-S-001",
+      "name": "Initial",
+      "type": "Initial"
+    }},
+    {{
+      "id": "STM-S-002",
+      "name": "Standby",
+      "type": "State"
+    }},
+    {{
+      "id": "STM-S-003",
+      "name": "StationKeeping",
+      "type": "State"
+    }},
+    {{
+      "id": "STM-S-004",
+      "name": "FRCDeployed",
+      "type": "State"
+    }},
+    {{
+      "id": "STM-S-005",
+      "name": "Final",
+      "type": "Final"
+    }}
+  ],
+  "transitions": [
+    {{
+      "id": "STM-T-001",
+      "source": "STM-S-001",
+      "target": "STM-S-002",
+      "trigger": null,
+      "guard": null
+    }},
+    {{
+      "id": "STM-T-002",
+      "source": "STM-S-002",
+      "target": "STM-S-003",
+      "trigger": "SARTaskingReceived",
+      "guard": "[positionLockAcquired == true]"
+    }},
+    {{
+      "id": "STM-T-003",
+      "source": "STM-S-003",
+      "target": "STM-S-004",
+      "trigger": "FRCLaunchAuthorised",
+      "guard": "[seaState <= SS3]"
+    }}
+  ]
+}}
+
+---
+
+OUTPUT
+
+Generate a JSON object matching the schema above, derived from the provided requirements. Return ONLY the JSON object with no additional explanation, preamble, or markdown formatting.
+
+Rules:
+1. State IDs follow STM-S-NNN, transition IDs follow STM-T-NNN.
+2. The "type" field must be one of: "Initial" (pseudostate, no incoming transitions), "State" (normal state), "Final" (terminal pseudostate).
+3. Include exactly one state with type "Initial" — it has no incoming transitions.
+4. Transitions reference valid state IDs in source and target.
+5. Triggers are SysML event names (e.g., "SARAlertReceived", "PositionLockAcquired", "FRCRecovered") or null for the Initial transition.
+6. Guards are boolean expressions or null (e.g., "[weather == SAFE]", "[stationKeepingActive == true]").
+7. Every non-Initial state must be reachable from the Initial state via transitions.
+8. Derive states and transitions from the operational modes and conditions implied by the requirements.

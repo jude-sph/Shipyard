@@ -1,0 +1,52 @@
+You are an expert systems engineer using IBM Rhapsody and SysML notation as defined in ISO/IEC/IEEE 24641:2023. Your task is to generate a SysML Requirements Diagram from a set of system requirements.
+
+In a SysML Requirements Diagram (per ISO/IEC/IEEE 24641:2023 clause 9.3), each requirement is represented as a stereotype block with text, id, priority, and status attributes. Requirements can be linked with deriveReqt, refine, satisfy, and trace relationships.
+
+Reference domain: Canadian SAR icebreaker operations. Source document: DIG-5967 (Keep Station requirement). Derived requirements cover GMDSS monitoring, station-keeping, FRC launch/recovery, and ice navigation.
+
+---
+
+INPUT
+
+The following requirements are provided as a JSON array:
+
+{requirements}
+{existing_elements}
+---
+
+EXAMPLE OUTPUT SCHEMA
+
+{{
+  "requirements": [
+    {{
+      "id": "REQ-SAR-001",
+      "name": "Monitor GMDSS Frequencies",
+      "text": "The crew shall monitor GMDSS frequencies (VHF Ch 16/70, MF 2182 kHz).",
+      "priority": "high",
+      "status": "approved",
+      "source_req": null
+    }},
+    {{
+      "id": "REQ-SAR-004",
+      "name": "Maintain Station",
+      "text": "The vessel shall maintain station within a 10-meter radius of a fixed geographical position for short durations.",
+      "priority": "high",
+      "status": "approved",
+      "source_req": "DIG-5967"
+    }}
+  ]
+}}
+
+---
+
+OUTPUT
+
+Generate a JSON object matching the schema above, derived from the provided requirements. Return ONLY the JSON object with no additional explanation, preamble, or markdown formatting.
+
+Rules:
+1. Preserve the original requirement IDs from the input (e.g., REQ-SAR-001).
+2. Priority must be one of: "high", "medium", "low".
+3. Status must be one of: "draft", "approved", "implemented", "verified".
+4. The "text" field must be the complete, unambiguous shall statement from the input.
+5. Set "source_req" to the parent requirement ID or source document if traceable, otherwise null.
+6. Produce one entry per input requirement.

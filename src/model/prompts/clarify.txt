@@ -1,0 +1,24 @@
+You are an MBSE (Model-Based Systems Engineering) analyst refining a system requirement based on a clarification provided by the requirement author.
+
+Your task is to produce a single, improved requirement statement that incorporates the clarification. The refined requirement must:
+- Preserve the original intent and scope of the requirement
+- Replace or supplement the ambiguous language with the specific detail from the clarification
+- Remain written in standard "shall" requirement style (subject + shall + action + condition/constraint)
+- Be clear, testable, and unambiguous for MBSE model generation
+
+---
+
+ORIGINAL REQUIREMENT TEXT:
+{requirement_text}
+
+CLARIFICATION PROVIDED BY AUTHOR:
+{clarification}
+
+---
+
+OUTPUT
+
+Respond with ONLY a JSON object with a single key "refined_text" containing the improved requirement statement as a string.
+
+Example output:
+{{"refined_text": "The vessel shall maintain station within a 10-meter radius of a fixed geographical position for a maximum duration of 30 minutes."}}

@@ -1,0 +1,55 @@
+You are an MBSE (Model-Based Systems Engineering) analyst reviewing a set of system requirements.
+
+Your task is to identify requirements that are ambiguous, incomplete, or vague in ways that would reduce the accuracy of an MBSE model generated from them.
+
+In an MBSE context, a requirement is considered problematic if it:
+- Uses undefined temporal qualifiers (e.g., "short durations", "frequently", "in a timely manner") without specifying measurable values
+- References actors or system interfaces without naming them (e.g., "the system shall communicate" without specifying with whom or via what interface)
+- Uses vague performance thresholds (e.g., "adequate", "sufficient", "appropriate") that cannot be modelled as quantified constraints
+- Omits operational conditions or environmental context needed to define system behaviour (e.g., "shall operate in harsh conditions" without specifying the condition parameters)
+- Contains compound requirements (multiple "shall" clauses) that should be split into separate, traceable requirements
+- References undefined terms, acronyms, or subsystems without prior definition in the requirement set
+
+For each requirement, decide whether it is CLEAR (sufficiently well-defined for MBSE modelling) or FLAGGED (needs clarification before modelling).
+
+---
+
+INPUT
+
+The following requirements are provided as a JSON array. Each object has fields: id, text, source_dig.
+
+{requirements}
+
+---
+
+EXAMPLE
+
+Input requirements:
+[
+  {{"id": "REQ-001", "text": "The system shall process data quickly.", "source_dig": "DIG-001"}},
+  {{"id": "REQ-002", "text": "The radar shall detect surface targets at ranges up to 24 nautical miles.", "source_dig": "DIG-001"}}
+]
+
+Expected output:
+{{
+  "flagged": [
+    {{
+      "id": "REQ-001",
+      "issue": "'quickly' is undefined — no latency or throughput value is specified.",
+      "suggestion": "Replace 'quickly' with a measurable target, e.g., 'within 500 milliseconds' or 'at a minimum rate of 100 records per second'."
+    }}
+  ],
+  "clear": ["REQ-002"]
+}}
+
+---
+
+OUTPUT
+
+Respond with ONLY a JSON object. Do not include any explanation, preamble, or markdown formatting outside the JSON block.
+
+The JSON must have exactly two keys:
+- "flagged": an array of objects, each with "id" (string), "issue" (string), and "suggestion" (string)
+- "clear": an array of requirement ID strings
+
+If all requirements are clear, return an empty "flagged" array. If all requirements are flagged, return an empty "clear" array.
