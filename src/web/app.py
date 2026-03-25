@@ -13,11 +13,13 @@ from typing import Any
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
+from starlette.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from src.core import config
 from src.core.config import MODEL_CATALOGUE, MODEL_PRICING, DECOMPOSE_MODEL, MBSE_MODEL
-from src.core.models.core import ProjectModel
+from src.core.models.core import ProjectModel, Requirement, SourceFile
+from src.core.models.decompose import RequirementTree
 from src.core.project import (
     new_project,
     save_project,
@@ -485,6 +487,737 @@ async def update_software():
         }
     except Exception as exc:
         return {"status": "error", "message": str(exc)}
+
+
+# ---------------------------------------------------------------------------
+# Decompose helpers
+# ---------------------------------------------------------------------------
+
+def _flatten_tree_to_requirements(tree: RequirementTree) -> list[Requirement]:
+    """Flatten a decomposition tree to a flat list of Requirements."""
+    reqs = []
+
+    def _walk(node, dig_id, path=""):
+        node_path = f"{path}.{node.level}" if path else f"L{node.level}"
+        req_id = f"{dig_id}-{node_path}"
+        reqs.append(Requirement(id=req_id, text=node.technical_requirement, source_dig=dig_id))
+        for i, child in enumerate(node.children, 1):
+            _walk(child, dig_id, f"{node_path}.{i}")
+
+    if tree.root:
+        _walk(tree.root, tree.dig_id)
+    return reqs
+
+
+def _sync_modeling_queue(project):
+    """Update modeling queue and flat requirements list from decomposition trees."""
+    if not project.auto_send:
+        return
+    all_reqs = []
+    for dig_id, tree_data in project.decomposition_trees.items():
+        tree = RequirementTree.model_validate(tree_data) if isinstance(tree_data, dict) else tree_data
+        all_reqs.extend(_flatten_tree_to_requirements(tree))
+    # Update requirements list with decomposed reqs (keep any direct uploads)
+    decomp_ids = {r.id for r in all_reqs}
+    existing_direct = [r for r in project.requirements if r.id not in decomp_ids]
+    project.requirements = existing_direct + all_reqs
+    project.modeling_queue = [r.id for r in all_reqs]
+
+
+# ---------------------------------------------------------------------------
+# Decompose routes
+# ---------------------------------------------------------------------------
+
+@app.post("/decompose/upload")
+async def decompose_upload(file: UploadFile = File(...)):
+    """Upload GTR-SDS.xlsx or additional source file."""
+    global current_project
+    project = _require_project()
+
+    if not file.filename:
+        raise HTTPException(400, "No filename provided")
+
+    from src.core.project import _slugify as project_slugify
+    slug = project_slugify(project.project.name)
+    uploads_dir = config.PROJECTS_DIR / slug / "uploads"
+    uploads_dir.mkdir(parents=True, exist_ok=True)
+
+    dest = uploads_dir / file.filename
+    with open(dest, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+
+    # Compute SHA-256
+    import hashlib
+    sha = hashlib.sha256(dest.read_bytes()).hexdigest()
+
+    # Load workbook data
+    from src.decompose.loader import load_workbook_data
+    try:
+        wb_data = load_workbook_data(dest)
+    except Exception as exc:
+        raise HTTPException(400, f"Failed to load workbook: {exc}")
+
+    # Store reference data in project
+    import dataclasses
+    project.reference_data = dataclasses.asdict(wb_data)
+
+    # Add source file record
+    project.sources.append(SourceFile(
+        filename=file.filename,
+        file_type="reference",
+        sha256=sha,
+    ))
+
+    push_undo(project)
+    save_project(project)
+    current_project = project
+
+    return {
+        "filename": file.filename,
+        "digs_loaded": len(wb_data.digs),
+        "sha256": sha,
+    }
+
+
+@app.get("/decompose/digs")
+async def decompose_digs():
+    """List available DIGs from loaded reference data."""
+    project = _require_project()
+    if not project.reference_data:
+        return []
+    digs = project.reference_data.get("digs", {})
+    return list(digs.values())
+
+
+@app.post("/decompose/run")
+async def decompose_run(request: Request):
+    """Start decomposition job (async)."""
+    global current_project
+    project = _require_project()
+    body = await request.json()
+    dig_ids = body.get("dig_ids", [])
+    settings = body.get("settings", {})
+
+    if not dig_ids:
+        raise HTTPException(400, "No DIG IDs provided")
+    if not project.reference_data:
+        raise HTTPException(400, "No reference data loaded. Upload a workbook first.")
+
+    job_id = str(uuid.uuid4())
+    job = Job(id=job_id, job_type="decompose", settings={"dig_ids": dig_ids, **settings})
+    jobs[job_id] = job
+
+    async def _run():
+        from src.decompose.loader import WorkbookData
+        from src.decompose.decomposer import decompose_dig
+        from src.decompose.verifier import apply_vv_to_tree
+        from src.decompose.validator import validate_tree_structure, run_semantic_judge
+        from src.decompose.refiner import refine_tree
+        from src.core.cost_tracker import CostTracker
+
+        try:
+            job.status = "running"
+            job.emit({"type": "started", "job_id": job_id, "dig_ids": dig_ids})
+
+            ref_data = WorkbookData(**project.reference_data)
+            max_depth = settings.get("max_depth", project.decomposition_settings.max_depth)
+            max_breadth = settings.get("max_breadth", project.decomposition_settings.max_breadth)
+            skip_vv = settings.get("skip_vv", project.decomposition_settings.skip_vv)
+            skip_judge = settings.get("skip_judge", project.decomposition_settings.skip_judge)
+            tracker = CostTracker(model=project.decomposition_settings.model)
+
+            for dig_id in dig_ids:
+                if job.cancelled:
+                    job.emit({"type": "cancelled"})
+                    job.status = "cancelled"
+                    return
+
+                dig_info = project.reference_data.get("digs", {}).get(dig_id)
+                if not dig_info:
+                    job.emit({"type": "warning", "message": f"DIG {dig_id} not found"})
+                    continue
+
+                dig_text = dig_info["dig_text"]
+                job.emit({"type": "phase", "dig_id": dig_id, "phase": "decompose"})
+
+                tree = await asyncio.get_event_loop().run_in_executor(
+                    None, lambda: decompose_dig(dig_id, dig_text, ref_data, max_depth, max_breadth, skip_vv, tracker)
+                )
+
+                if not skip_vv:
+                    job.emit({"type": "phase", "dig_id": dig_id, "phase": "vv"})
+                    await asyncio.get_event_loop().run_in_executor(
+                        None, lambda: apply_vv_to_tree(tree, ref_data, tracker)
+                    )
+
+                job.emit({"type": "phase", "dig_id": dig_id, "phase": "validate"})
+                issues = validate_tree_structure(tree, ref_data, max_depth, max_breadth)
+
+                if not skip_judge:
+                    job.emit({"type": "phase", "dig_id": dig_id, "phase": "judge"})
+                    review = await asyncio.get_event_loop().run_in_executor(
+                        None, lambda: run_semantic_judge(tree, tracker)
+                    )
+                    if review.issues:
+                        job.emit({"type": "phase", "dig_id": dig_id, "phase": "refine"})
+                        tree = await asyncio.get_event_loop().run_in_executor(
+                            None, lambda: refine_tree(tree, review, ref_data, tracker)
+                        )
+
+                project.decomposition_trees[dig_id] = json.loads(tree.model_dump_json())
+                job.emit({"type": "dig_complete", "dig_id": dig_id, "num_nodes": tree.count_nodes()})
+
+            _sync_modeling_queue(project)
+            save_project(project)
+
+            job.status = "complete"
+            job.emit({"type": "complete"})
+        except Exception as exc:
+            job.status = "failed"
+            job.emit({"type": "error", "message": str(exc)})
+
+    job.task = asyncio.create_task(_run())
+    return {"job_id": job_id}
+
+
+@app.get("/decompose/stream/{job_id}")
+async def decompose_stream(job_id: str):
+    """SSE progress stream for decomposition job."""
+    async def event_generator():
+        job = jobs.get(job_id)
+        if not job:
+            yield f"data: {json.dumps({'type': 'error', 'message': 'Job not found'})}\n\n"
+            return
+        last_idx = 0
+        while True:
+            while last_idx < len(job.events):
+                event = job.events[last_idx]
+                yield f"data: {json.dumps(event)}\n\n"
+                last_idx += 1
+                if event.get("type") in ("complete", "error", "cancelled"):
+                    return
+            if job.status in ("complete", "failed", "cancelled"):
+                return
+            await asyncio.sleep(0.1)
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+@app.post("/decompose/cancel/{job_id}")
+async def decompose_cancel(job_id: str):
+    """Cancel a running decomposition job."""
+    job = jobs.get(job_id)
+    if not job:
+        raise HTTPException(404, "Job not found")
+    job.cancelled = True
+    return {"status": "cancelling", "job_id": job_id}
+
+
+@app.get("/decompose/results")
+async def decompose_results():
+    """List all decomposed trees (metadata)."""
+    project = _require_project()
+    results = []
+    for dig_id, tree_data in project.decomposition_trees.items():
+        tree = RequirementTree.model_validate(tree_data) if isinstance(tree_data, dict) else tree_data
+        results.append({
+            "dig_id": dig_id,
+            "dig_text": tree.dig_text,
+            "num_nodes": tree.count_nodes(),
+            "max_depth": tree.max_depth(),
+            "cost": tree.cost.total_cost_usd if tree.cost else 0.0,
+            "queued": dig_id in [mid.split("-")[0] for mid in project.modeling_queue] if project.modeling_queue else False,
+        })
+    return results
+
+
+@app.get("/decompose/results/{dig_id}")
+async def decompose_result(dig_id: str):
+    """Get full tree for a DIG."""
+    project = _require_project()
+    tree_data = project.decomposition_trees.get(dig_id)
+    if tree_data is None:
+        raise HTTPException(404, f"No decomposition found for DIG {dig_id}")
+    return tree_data
+
+
+@app.delete("/decompose/results/{dig_id}")
+async def decompose_delete(dig_id: str):
+    """Delete a decomposition."""
+    global current_project
+    project = _require_project()
+    if dig_id not in project.decomposition_trees:
+        raise HTTPException(404, f"No decomposition found for DIG {dig_id}")
+
+    push_undo(project)
+    del project.decomposition_trees[dig_id]
+    _sync_modeling_queue(project)
+    save_project(project)
+    current_project = project
+    return {"status": "deleted", "dig_id": dig_id}
+
+
+@app.post("/decompose/estimate")
+async def decompose_estimate(request: Request):
+    """Dry-run cost estimate based on num DIGs, depth, and model pricing."""
+    project = _require_project()
+    body = await request.json()
+    dig_ids = body.get("dig_ids", [])
+    max_depth = body.get("max_depth", project.decomposition_settings.max_depth)
+    max_breadth = body.get("max_breadth", project.decomposition_settings.max_breadth)
+    model = body.get("model", project.decomposition_settings.model)
+
+    pricing = MODEL_PRICING.get(model, {})
+    input_rate = pricing.get("input_per_mtok", 0.0)
+    output_rate = pricing.get("output_per_mtok", 0.0)
+
+    num_digs = len(dig_ids)
+    # Estimate: each DIG generates ~max_depth levels, each level ~max_breadth nodes
+    # Each node: ~800 input tokens, ~600 output tokens for decompose + ~400/300 for V&V
+    est_nodes_per_dig = sum(max_breadth ** i for i in range(max_depth))
+    total_nodes = num_digs * est_nodes_per_dig
+    est_input = total_nodes * 1200
+    est_output = total_nodes * 900
+
+    min_cost = (est_input * input_rate + est_output * output_rate) / 1_000_000
+    max_cost = min_cost * 1.5  # 50% buffer
+
+    return {
+        "num_digs": num_digs,
+        "estimated_nodes": total_nodes,
+        "model": model,
+        "estimated_min_cost": round(min_cost, 4),
+        "estimated_max_cost": round(max_cost, 4),
+    }
+
+
+@app.post("/decompose/send-to-model")
+async def decompose_send_to_model(request: Request):
+    """Manually send requirement IDs to modeling queue."""
+    global current_project
+    project = _require_project()
+    body = await request.json()
+    req_ids = body.get("req_ids", [])
+
+    push_undo(project)
+    # Add to modeling queue (dedup)
+    existing = set(project.modeling_queue)
+    for rid in req_ids:
+        if rid not in existing:
+            project.modeling_queue.append(rid)
+            existing.add(rid)
+
+    save_project(project)
+    current_project = project
+    return {"status": "ok", "queue_size": len(project.modeling_queue)}
+
+
+@app.post("/decompose/settings")
+async def decompose_settings(request: Request):
+    """Update decompose model + depth/breadth."""
+    global current_project
+    project = _require_project()
+    body = await request.json()
+
+    push_undo(project)
+    if "model" in body:
+        project.decomposition_settings.model = body["model"]
+    if "max_depth" in body:
+        project.decomposition_settings.max_depth = body["max_depth"]
+    if "max_breadth" in body:
+        project.decomposition_settings.max_breadth = body["max_breadth"]
+    if "skip_vv" in body:
+        project.decomposition_settings.skip_vv = body["skip_vv"]
+    if "skip_judge" in body:
+        project.decomposition_settings.skip_judge = body["skip_judge"]
+
+    save_project(project)
+    current_project = project
+    return {"status": "ok", "decomposition_settings": json.loads(project.decomposition_settings.model_dump_json())}
+
+
+# ---------------------------------------------------------------------------
+# Model routes
+# ---------------------------------------------------------------------------
+
+@app.post("/model/upload")
+async def model_upload(file: UploadFile = File(...)):
+    """Direct upload of pre-decomposed requirements."""
+    global current_project
+    project = _require_project()
+
+    if not file.filename:
+        raise HTTPException(400, "No filename provided")
+
+    from src.core.project import _slugify as project_slugify
+    slug = project_slugify(project.project.name)
+    uploads_dir = config.PROJECTS_DIR / slug / "uploads"
+    uploads_dir.mkdir(parents=True, exist_ok=True)
+
+    dest = uploads_dir / file.filename
+    with open(dest, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+
+    # Compute SHA-256
+    import hashlib
+    sha = hashlib.sha256(dest.read_bytes()).hexdigest()
+
+    # Parse requirements
+    from src.core.parser import parse_requirements_file
+    try:
+        reqs = parse_requirements_file(dest)
+    except Exception as exc:
+        raise HTTPException(400, f"Failed to parse requirements: {exc}")
+
+    push_undo(project)
+
+    # Add to project
+    project.requirements.extend(reqs)
+    new_ids = [r.id for r in reqs]
+    project.modeling_queue.extend(new_ids)
+
+    project.sources.append(SourceFile(
+        filename=file.filename,
+        file_type="requirements",
+        sha256=sha,
+    ))
+
+    save_project(project)
+    current_project = project
+
+    return {
+        "filename": file.filename,
+        "requirements_loaded": len(reqs),
+        "sha256": sha,
+    }
+
+
+@app.get("/model/queue")
+async def model_queue():
+    """Get requirements available for modeling."""
+    project = _require_project()
+    dismissed = set(project.dismissed_from_modeling)
+    queue_set = set(project.modeling_queue)
+    result = []
+    for r in project.requirements:
+        if r.id in queue_set and r.id not in dismissed:
+            result.append(json.loads(r.model_dump_json()))
+    return result
+
+
+@app.post("/model/dismiss")
+async def model_dismiss(request: Request):
+    """Hide requirements from modeling queue."""
+    global current_project
+    project = _require_project()
+    body = await request.json()
+    req_ids = body.get("req_ids", [])
+
+    push_undo(project)
+    existing = set(project.dismissed_from_modeling)
+    for rid in req_ids:
+        if rid not in existing:
+            project.dismissed_from_modeling.append(rid)
+            existing.add(rid)
+
+    save_project(project)
+    current_project = project
+    return {"status": "ok", "dismissed_count": len(project.dismissed_from_modeling)}
+
+
+@app.post("/model/restore")
+async def model_restore(request: Request):
+    """Restore dismissed requirements."""
+    global current_project
+    project = _require_project()
+    body = await request.json()
+    req_ids = set(body.get("req_ids", []))
+
+    push_undo(project)
+    project.dismissed_from_modeling = [
+        rid for rid in project.dismissed_from_modeling if rid not in req_ids
+    ]
+
+    save_project(project)
+    current_project = project
+    return {"status": "ok", "dismissed_count": len(project.dismissed_from_modeling)}
+
+
+@app.post("/model/run")
+async def model_run(request: Request):
+    """Start MBSE pipeline job."""
+    global current_project
+    project = _require_project()
+    body = await request.json()
+    req_ids = body.get("req_ids", [])
+    layers = body.get("layers", project.model_settings.selected_layers)
+    mode = body.get("mode", project.project.mode)
+
+    if not req_ids:
+        raise HTTPException(400, "No requirement IDs provided")
+    if not layers:
+        raise HTTPException(400, "No layers selected")
+
+    job_id = str(uuid.uuid4())
+    job = Job(id=job_id, job_type="model", settings={"req_ids": req_ids, "layers": layers, "mode": mode})
+    jobs[job_id] = job
+
+    async def _run():
+        from src.model.pipeline import run_pipeline, merge_batch_into_project
+        from src.core.cost_tracker import CostTracker
+
+        try:
+            job.status = "running"
+            job.emit({"type": "started", "job_id": job_id})
+
+            # Get requirements from project
+            req_map = {r.id: r for r in project.requirements}
+            reqs = [req_map[rid] for rid in req_ids if rid in req_map]
+
+            if not reqs:
+                job.emit({"type": "error", "message": "No matching requirements found"})
+                job.status = "failed"
+                return
+
+            model_name = project.model_settings.model or config.MBSE_MODEL
+
+            def _emit(event):
+                job.emit(event)
+
+            result = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: run_pipeline(
+                    requirements=reqs,
+                    mode=mode,
+                    selected_layers=layers,
+                    model=model_name,
+                    provider=config.PROVIDER,
+                    emit=_emit,
+                    existing_model=project if project.layers else None,
+                ),
+            )
+
+            merge_batch_into_project(
+                project=project,
+                new_requirements=result.requirements,
+                new_layers=result.layers,
+                new_links=result.links,
+                new_instructions=result.instructions,
+                source_file="web-upload",
+                layers_generated=layers,
+                model_name=model_name,
+                cost=result.meta.cost.total_cost_usd if result.meta and result.meta.cost else 0.0,
+            )
+
+            save_project(project)
+            job.status = "complete"
+            job.emit({"type": "complete"})
+        except Exception as exc:
+            job.status = "failed"
+            job.emit({"type": "error", "message": str(exc)})
+
+    job.task = asyncio.create_task(_run())
+    return {"job_id": job_id}
+
+
+@app.get("/model/stream/{job_id}")
+async def model_stream(job_id: str):
+    """SSE progress stream for model job."""
+    async def event_generator():
+        job = jobs.get(job_id)
+        if not job:
+            yield f"data: {json.dumps({'type': 'error', 'message': 'Job not found'})}\n\n"
+            return
+        last_idx = 0
+        while True:
+            while last_idx < len(job.events):
+                event = job.events[last_idx]
+                yield f"data: {json.dumps(event)}\n\n"
+                last_idx += 1
+                if event.get("type") in ("complete", "error", "cancelled"):
+                    return
+            if job.status in ("complete", "failed", "cancelled"):
+                return
+            await asyncio.sleep(0.1)
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+@app.post("/model/cancel/{job_id}")
+async def model_cancel(job_id: str):
+    """Cancel a running model job."""
+    job = jobs.get(job_id)
+    if not job:
+        raise HTTPException(404, "Job not found")
+    job.cancelled = True
+    return {"status": "cancelling", "job_id": job_id}
+
+
+@app.post("/model/chat")
+async def model_chat(request: Request):
+    """Chat with project-wide agent."""
+    global current_project
+    project = _require_project()
+    body = await request.json()
+    message = body.get("message", "")
+
+    if not message.strip():
+        raise HTTPException(400, "Empty message")
+
+    from src.model.agent.chat import chat_with_agent
+    from src.core.cost_tracker import CostTracker
+
+    tracker = CostTracker(model=project.model_settings.model or config.MBSE_MODEL)
+
+    try:
+        response_text, updated_history = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: chat_with_agent(
+                project=project,
+                user_message=message,
+                conversation_history=project.chat_history,
+                tracker=tracker,
+                mode="model",
+            ),
+        )
+        project.chat_history = updated_history
+        save_project(project)
+        current_project = project
+        return {"response": response_text}
+    except Exception as exc:
+        raise HTTPException(500, f"Chat failed: {exc}")
+
+
+@app.post("/model/chat/clear")
+async def model_chat_clear():
+    """Clear chat history."""
+    global current_project
+    project = _require_project()
+    project.chat_history = []
+    save_project(project)
+    current_project = project
+    return {"status": "ok"}
+
+
+@app.post("/model/retry-instructions")
+async def model_retry_instructions(request: Request):
+    """Regenerate recreation instructions."""
+    global current_project
+    project = _require_project()
+
+    if not project.layers:
+        raise HTTPException(400, "No model layers to generate instructions for")
+
+    from src.model.stages import generate_instructions
+    from src.core.cost_tracker import CostTracker
+    from src.core.llm_client import create_client
+
+    tracker = CostTracker(model=project.model_settings.model or config.MBSE_MODEL)
+
+    try:
+        def _emit(event):
+            pass  # No SSE for retry
+
+        instructions = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: generate_instructions(
+                project.project.mode,
+                {"layers": project.layers},
+                tracker,
+                client=create_client(),
+                emit=_emit,
+            ),
+        )
+        push_undo(project)
+        project.instructions = instructions
+        save_project(project)
+        current_project = project
+        return {"status": "ok", "instructions": instructions}
+    except Exception as exc:
+        raise HTTPException(500, f"Failed to regenerate instructions: {exc}")
+
+
+@app.post("/model/settings")
+async def model_settings(request: Request):
+    """Update modeling model + layer selection."""
+    global current_project
+    project = _require_project()
+    body = await request.json()
+
+    push_undo(project)
+    if "model" in body:
+        project.model_settings.model = body["model"]
+    if "layers" in body:
+        project.model_settings.selected_layers = body["layers"]
+
+    save_project(project)
+    current_project = project
+    return {"status": "ok", "model_settings": json.loads(project.model_settings.model_dump_json())}
+
+
+# ---------------------------------------------------------------------------
+# Export routes
+# ---------------------------------------------------------------------------
+
+@app.get("/export/decomposition")
+async def export_decomposition():
+    """Export decomposed requirements as XLSX."""
+    project = _require_project()
+    if not project.decomposition_trees:
+        raise HTTPException(400, "No decomposition trees to export")
+
+    from src.core.exporter import export_trees_to_xlsx
+
+    trees = []
+    for tree_data in project.decomposition_trees.values():
+        tree = RequirementTree.model_validate(tree_data) if isinstance(tree_data, dict) else tree_data
+        trees.append(tree)
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
+        tmp_path = Path(tmp.name)
+
+    export_trees_to_xlsx(trees, tmp_path)
+    project_name = project.project.name or "project"
+    filename = project_name.lower().replace(" ", "-") + "-decomposition.xlsx"
+    return FileResponse(tmp_path, filename=filename, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+
+@app.get("/export/model/{fmt}")
+async def export_model(fmt: str):
+    """Export MBSE model (json/xlsx/text)."""
+    project = _require_project()
+
+    from src.core.exporter import export_json, export_xlsx, export_text
+
+    project_name = project.project.name or "project"
+    base_name = project_name.lower().replace(" ", "-") + "-model"
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=f".{fmt}") as tmp:
+        tmp_path = Path(tmp.name)
+
+    if fmt == "json":
+        export_json(project, tmp_path)
+        media_type = "application/json"
+        filename = base_name + ".json"
+    elif fmt == "xlsx":
+        export_xlsx(project, tmp_path)
+        media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        filename = base_name + ".xlsx"
+    elif fmt == "text":
+        export_text(project, tmp_path)
+        media_type = "text/plain"
+        filename = base_name + ".txt"
+    else:
+        raise HTTPException(400, f"Unsupported format: {fmt}. Use json, xlsx, or text.")
+
+    return FileResponse(tmp_path, filename=filename, media_type=media_type)
+
+
+@app.get("/export/full")
+async def export_full():
+    """Export full project JSON."""
+    project = _require_project()
+    return json.loads(project.model_dump_json())
 
 
 # ---------------------------------------------------------------------------
