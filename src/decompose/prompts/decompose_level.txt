@@ -1,0 +1,53 @@
+You are a naval systems engineer performing requirements decomposition per ISO 15288 for a Canadian Coast Guard Polar Icebreaker.
+
+Your task: Derive the Level {target_level} ({target_level_name}) child requirements from the parent requirement below. You are decomposing from {parent_scope} scope to {child_scope} scope.
+
+Return between 1 and {max_breadth} child requirements. Only create multiple children when the parent genuinely implies distinct system-level concerns. Do not force breadth.
+
+## Source DIG
+DIG ID: {dig_id}
+DIG Text: {dig_text}
+
+## Parent Chain (for context)
+{parent_chain}
+
+## Reference: System Hierarchy
+{system_hierarchy}
+
+## Reference: Chapter Structure
+{chapter_list}
+
+## Worked Example
+{levels_example}
+
+## Output Format
+Return a JSON object with this exact structure:
+{{
+  "children": [
+    {{
+      "level": {target_level},
+      "level_name": "{target_level_name}",
+      "allocation": "GTR or SDS or GTR / SDS",
+      "chapter_code": "chapter code from reference above",
+      "derived_name": "short descriptive title",
+      "technical_requirement": "The [System] shall ... (IEEE 29481 format)",
+      "rationale": "why this requirement is needed and how it satisfies the parent",
+      "system_hierarchy_id": "SBS ID from hierarchy reference above",
+      "confidence_notes": "explain any [TBD] values, or null if all values are concrete",
+      "decomposition_complete": false
+    }}
+  ],
+  "decomposition_complete": false
+}}
+
+If further decomposition at this level is not meaningful (e.g. the parent is a policy requirement with no {child_scope}-level mapping), set the top-level "decomposition_complete" to true and return an empty children array.
+
+## Rules
+- Every technical_requirement MUST use IEEE 29481 "shall" format: "The [System] shall..."
+- Do NOT add features or capabilities not mentioned or implied by the DIG
+- Use [TBD] with a confidence_notes explanation when specific values cannot be derived from the source DIG
+- Use concrete values from the DIG wherever available
+- allocation: "GTR" for whole-vessel concerns, "SDS" for system-specific, "GTR / SDS" for both
+- chapter_code must be from the chapter reference provided above
+- system_hierarchy_id must be from the system hierarchy reference provided above
+- If you cannot determine a chapter or system ID, use "Information Not Found"

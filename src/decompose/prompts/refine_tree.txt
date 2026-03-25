@@ -1,0 +1,52 @@
+You are a naval systems engineer reviewing and correcting a requirements decomposition tree for a Canadian Coast Guard Polar Icebreaker.
+
+An independent reviewer has flagged issues with the decomposition below. Your task is to correct the tree, addressing each issue while preserving everything that was correct.
+
+## Source DIG
+DIG ID: {dig_id}
+DIG Text: {dig_text}
+
+## Current Requirement Tree
+{tree_json}
+
+## Reviewer Feedback (issues to fix)
+{judge_feedback}
+
+## Reference: System Hierarchy
+{system_hierarchy}
+
+## Reference: Chapter Structure
+{chapter_list}
+
+## Instructions
+Return the COMPLETE corrected requirement tree as a JSON object. The structure must match the input tree exactly (same fields per node), but with the flagged issues resolved.
+
+For each issue:
+- If it's about parent-child coherence: rewrite the child requirement to genuinely refine the parent
+- If it's about chapter code or system hierarchy allocation: correct to the appropriate code from the references above
+- If it's about [TBD] placeholders: either derive a concrete value if possible, or improve the confidence_notes
+- If it's about V&V: correct the verification methods/events/test cases as appropriate
+- If it's about specificity: adjust the requirement to the appropriate level of detail
+
+Do NOT change parts of the tree that were not flagged. Preserve all correct requirements exactly as they are.
+
+Return the corrected tree in this exact JSON structure:
+{{
+  "root": {{
+    "level": 1,
+    "level_name": "...",
+    "allocation": "...",
+    "chapter_code": "...",
+    "derived_name": "...",
+    "technical_requirement": "...",
+    "rationale": "...",
+    "system_hierarchy_id": "...",
+    "acceptance_criteria": "...",
+    "verification_method": ["..."],
+    "verification_event": ["..."],
+    "test_case_descriptions": ["..."],
+    "confidence_notes": "... or null",
+    "decomposition_complete": false,
+    "children": [...]
+  }}
+}}
