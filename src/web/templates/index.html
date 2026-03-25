@@ -47,6 +47,9 @@
         <button class="btn-dismiss" onclick="this.parentElement.classList.add('hidden')">&#10005;</button>
     </div>
 
+    <!-- Main content wrapper: views + agent panel side by side -->
+    <div id="main-content">
+
     <!-- ================================================================= -->
     <!-- DECOMPOSE MODE                                                    -->
     <!-- ================================================================= -->
@@ -65,13 +68,15 @@
                         <input type="file" id="decomp-file-input" accept=".xlsx,.xls,.csv"
                                style="display:none" onchange="handleDecompUpload(this)">
                         <div id="decomp-upload-text">
-                            &#128194; Drop xlsx here or click to upload
+                            &#128194; Upload a GTR-SDS reference workbook to enable decomposition
                         </div>
                     </div>
                     <div id="decomp-file-actions" class="file-actions hidden">
                         <a id="decomp-download-source" href="/decompose/download-source" class="btn-secondary">&#11015; Source XLSX</a>
                         <a id="decomp-download-results" href="/decompose/export" class="btn-secondary">&#11015; Results XLSX</a>
+                        <button class="btn-secondary" onclick="triggerUploadAnother()">+ Upload Another</button>
                     </div>
+                    <div id="decomp-file-list" class="file-list"></div>
                 </div>
 
                 <!-- Controls -->
@@ -199,15 +204,6 @@
                         <span id="req-selected-count"></span>
                     </div>
                     <div id="req-preview-list" class="req-preview-list"></div>
-                </div>
-
-                <!-- LLM Provider -->
-                <div class="sidebar-section">
-                    <label class="section-label">LLM PROVIDER</label>
-                    <div id="provider-selector" class="segment-control">
-                        <button class="segment" data-provider="api" onclick="setProvider('api')">API</button>
-                        <button class="segment" data-provider="local" onclick="setProvider('local')">Local</button>
-                    </div>
                 </div>
 
                 <!-- Generate Button -->
@@ -344,6 +340,8 @@
             <button class="btn-send" onclick="sendAgentMessage()">Send</button>
         </div>
     </div>
+
+    </div><!-- end #main-content -->
 
     <!-- ================================================================= -->
     <!-- SETTINGS MODAL                                                    -->
