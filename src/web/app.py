@@ -13,11 +13,15 @@ from typing import Any
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
+from fastapi.templating import Jinja2Templates
 from starlette.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from src.core import config
-from src.core.config import MODEL_CATALOGUE, MODEL_PRICING, DECOMPOSE_MODEL, MBSE_MODEL
+from src.core.config import (
+    MODEL_CATALOGUE, MODEL_PRICING, DECOMPOSE_MODEL, MBSE_MODEL,
+    CAPELLA_LAYERS, RHAPSODY_DIAGRAMS,
+)
 from src.core.models.core import ProjectModel, Requirement, SourceFile
 from src.core.models.decompose import RequirementTree
 from src.core.project import (
@@ -38,10 +42,14 @@ WEB_DIR = Path(__file__).parent
 
 app = FastAPI(title="Shipyard")
 
-# Mount static files only if the directory exists
+# Mount static files — create directory if missing so mount always works
 _static_dir = WEB_DIR / "static"
-if _static_dir.exists():
-    app.mount("/static", StaticFiles(directory=_static_dir), name="static")
+_static_dir.mkdir(exist_ok=True)
+app.mount("/static", StaticFiles(directory=_static_dir), name="static")
+
+# Jinja2 templates
+_templates_dir = WEB_DIR / "templates"
+templates = Jinja2Templates(directory=_templates_dir) if _templates_dir.exists() else None
 
 
 # ---------------------------------------------------------------------------
@@ -108,8 +116,33 @@ def _require_project() -> ProjectModel:
 # ---------------------------------------------------------------------------
 
 @app.get("/")
-async def index():
-    """Root endpoint. Returns JSON status (templates not yet available)."""
+async def index(request: Request):
+    """Root endpoint. Renders the SPA shell or returns JSON status."""
+    if templates is not None:
+        project_data = (
+            json.loads(current_project.model_dump_json())
+            if current_project else None
+        )
+        settings_data = {
+            "provider": config.PROVIDER,
+            "model": config.MODEL,
+            "decompose_model": config.DECOMPOSE_MODEL,
+            "mbse_model": config.MBSE_MODEL,
+            "default_mode": config.DEFAULT_MODE,
+            "anthropic_key_set": bool(config.ANTHROPIC_API_KEY),
+            "openrouter_key_set": bool(config.OPENROUTER_API_KEY),
+            "local_url": config.LOCAL_LLM_URL,
+            "auto_send": True,
+        }
+        return templates.TemplateResponse("index.html", {
+            "request": request,
+            "model_catalogue": MODEL_CATALOGUE,
+            "capella_layers": CAPELLA_LAYERS,
+            "rhapsody_diagrams": RHAPSODY_DIAGRAMS,
+            "settings": settings_data,
+            "project": project_data,
+        })
+    # Fallback JSON if templates directory is missing
     return {
         "app": "Shipyard",
         "status": "running",
