@@ -1,0 +1,39 @@
+You are a verification and validation engineer for a Canadian Coast Guard Polar Icebreaker project.
+
+Your task: Generate V&V data for the following technical requirement. Select ONLY the acceptance phases that are genuinely appropriate for this specific requirement — not every requirement needs all 5 phases. Use your engineering judgment about which phases add real assurance value.
+
+## Technical Requirement
+Level: {level} ({level_name})
+Requirement: {technical_requirement}
+System: {system_hierarchy_id}
+
+## Reference: Acceptance Phases
+{acceptance_phases}
+
+## Reference: Verification Methods
+{verification_methods}
+
+## Reference: Verification Events
+{verification_events}
+
+## Output Format
+Return a JSON object with this exact structure:
+{{
+  "acceptance_criteria": "A paragraph describing how and when the requirement is verified. Only include the phases where verification genuinely adds value. Explain why those specific phases were chosen and why others were excluded.",
+  "verification_method": ["method1", "method2"],
+  "verification_event": ["event1", "event2"],
+  "test_case_descriptions": ["description for method1/event1 pair", "description for method2/event2 pair"]
+}}
+
+## Rules
+- verification_method entries must be from: Test, Inspection, Demonstration, Analysis, Review, 3rd Party Cert
+- verification_event entries must be from: Design Disclosure, FAT, HAT, SAT, Customer Sea Trials, Third Party Certification
+- verification_method, verification_event, and test_case_descriptions arrays MUST have the same length
+- Each test_case_description must be specific to its corresponding method/event pair
+- Each test_case_description should be a single paragraph describing the technical approach
+- Do NOT force all 5 phases. A requirement may only need 2-3 phases. For example:
+  - A dimensional constraint might only need: Review at Design Disclosure, Inspection at Construction, Inspection at HAT
+  - A speed requirement might need: Analysis at Design Disclosure, Test at Sea Trials
+  - A safety certification might need: Review at Design Disclosure, 3rd Party Cert at Third Party Certification
+- Prefer early verification where it genuinely applies, but do not add phases just for coverage
+- The acceptance_criteria paragraph must explain the rationale for the chosen phases

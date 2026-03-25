@@ -1,0 +1,21 @@
+# Decomposition Levels Example
+
+## Level 1: Whole Ship
+- SBS/Chapter: SBS 700 (Trials) / SDS-Ch 1
+- Technical Requirement: "The Vessel shall achieve a maximum attainable forward speed of at least 17 knots when operating at Design Draft in WMO Sea State 1 with a clean hull."
+- Rationale: "Direct transposition of DIG [9646] into a verifiable top-level performance requirement."
+
+## Level 2: Major System
+- SBS/Chapter: SBS 200 (Propulsion) / SDS-Ch 2
+- Technical Requirement: "The Propulsion System shall provide a minimum delivered power (SP, dB) of [X] MW to the propulsors to overcome total hull resistance at 17 knots."
+- Rationale: "Defines the power-to-speed relationship required to meet the Level 1 mission objective."
+
+## Level 3: Subsystem
+- SBS/Chapter: SBS 234 (Podded Propulsors) / SDS-Ch 4
+- Technical Requirement: "Each Azimuthing Podded Propulsor shall be rated for a continuous output of [Y] kW at [Z] RPM in open water conditions."
+- Rationale: "Allocates the total required power (SP, dB) across the individual propulsion units."
+
+## Level 4: Equipment
+- SBS/Chapter: SBS 231 (Propulsion Motors) / GTR-Ch 12
+- Technical Requirement: "The Propulsion Motor shall maintain a winding temperature not exceeding 120°C during 4 hours of continuous operation at 100% MCR (Maximum Continuous Rating)."
+- Rationale: "Provides a verifiable hardware constraint (900/GTR-12 Quality) to ensure the motor can safely sustain the speed required."
