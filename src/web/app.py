@@ -73,6 +73,7 @@ class Job:
 current_project: ProjectModel | None = None
 current_project_name: str | None = None
 jobs: dict[str, Job] = {}
+_active_job_id: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -135,8 +136,7 @@ async def index(request: Request):
                 "local_url": config.LOCAL_LLM_URL,
                 "auto_send": True,
             }
-            return templates.TemplateResponse("index.html", {
-                "request": request,
+            return templates.TemplateResponse(request, "index.html", {
                 "model_catalogue": json.dumps(MODEL_CATALOGUE),
                 "capella_layers": json.dumps(CAPELLA_LAYERS),
                 "rhapsody_diagrams": json.dumps(RHAPSODY_DIAGRAMS),
@@ -642,7 +642,7 @@ async def decompose_digs():
 @app.post("/decompose/run")
 async def decompose_run(request: Request):
     """Start decomposition job (async)."""
-    global current_project
+    global current_project, _active_job_id
     project = _require_project()
     body = await request.json()
     dig_ids = body.get("dig_ids", [])
@@ -653,11 +653,45 @@ async def decompose_run(request: Request):
     if not project.reference_data:
         raise HTTPException(400, "No reference data loaded. Upload a workbook first.")
 
+    # Concurrent operation guard (Section 9.5)
+    if _active_job_id and _active_job_id in jobs and jobs[_active_job_id].status == "running":
+        active_job = jobs[_active_job_id]
+        return JSONResponse(status_code=409, content={
+            "error": "job_active",
+            "job_id": _active_job_id,
+            "job_type": active_job.job_type,
+            "message": "A job is already running.",
+        })
+
+    # Check for orphaned links before starting (Section 9.1)
+    warning = None
+    affected_digs = []
+    for did in dig_ids:
+        if did in project.decomposition_trees:
+            tree_data = project.decomposition_trees[did]
+            tree = RequirementTree.model_validate(tree_data) if isinstance(tree_data, dict) else tree_data
+            tree_reqs = _flatten_tree_to_requirements(tree)
+            tree_req_ids = {r.id for r in tree_reqs}
+            link_count = sum(1 for l in project.links if l.source in tree_req_ids or l.target in tree_req_ids)
+            if link_count > 0:
+                affected_digs.append({"dig_id": did, "link_count": link_count})
+    if affected_digs:
+        warning = {
+            "warning": "orphaned_links",
+            "affected_digs": affected_digs,
+            "message": ", ".join(
+                f"DIG {d['dig_id']} has {d['link_count']} requirements with traceability links"
+                for d in affected_digs
+            ) + ". Re-decomposing may change requirement IDs.",
+        }
+
     job_id = str(uuid.uuid4())
     job = Job(id=job_id, job_type="decompose", settings={"dig_ids": dig_ids, **settings})
     jobs[job_id] = job
+    _active_job_id = job_id
 
     async def _run():
+        global _active_job_id
         from src.decompose.loader import WorkbookData
         from src.decompose.decomposer import decompose_dig
         from src.decompose.verifier import apply_vv_to_tree
@@ -680,6 +714,7 @@ async def decompose_run(request: Request):
                 if job.cancelled:
                     job.emit({"type": "cancelled"})
                     job.status = "cancelled"
+                    _active_job_id = None
                     return
 
                 dig_info = project.reference_data.get("digs", {}).get(dig_id)
@@ -718,6 +753,12 @@ async def decompose_run(request: Request):
                 job.emit({"type": "dig_complete", "dig_id": dig_id, "num_nodes": tree.count_nodes()})
 
             _sync_modeling_queue(project)
+
+            # Detect orphaned links after decomposition (Section 9.1)
+            orphaned = _detect_orphaned_links(project)
+            if orphaned:
+                job.emit({"type": "warning", "message": f"{len(orphaned)} traceability links now reference requirements that no longer exist."})
+
             save_project(project)
 
             job.status = "complete"
@@ -725,9 +766,14 @@ async def decompose_run(request: Request):
         except Exception as exc:
             job.status = "failed"
             job.emit({"type": "error", "message": str(exc)})
+        finally:
+            _active_job_id = None
 
     job.task = asyncio.create_task(_run())
-    return {"job_id": job_id}
+    result = {"job_id": job_id}
+    if warning:
+        result["warning"] = warning
+    return result
 
 
 @app.get("/decompose/stream/{job_id}")
@@ -756,10 +802,13 @@ async def decompose_stream(job_id: str):
 @app.post("/decompose/cancel/{job_id}")
 async def decompose_cancel(job_id: str):
     """Cancel a running decomposition job."""
+    global _active_job_id
     job = jobs.get(job_id)
     if not job:
         raise HTTPException(404, "Job not found")
     job.cancelled = True
+    if _active_job_id == job_id:
+        _active_job_id = None
     return {"status": "cancelling", "job_id": job_id}
 
 
@@ -996,7 +1045,7 @@ async def model_restore(request: Request):
 @app.post("/model/run")
 async def model_run(request: Request):
     """Start MBSE pipeline job."""
-    global current_project
+    global current_project, _active_job_id
     project = _require_project()
     body = await request.json()
     req_ids = body.get("req_ids", [])
@@ -1008,11 +1057,23 @@ async def model_run(request: Request):
     if not layers:
         raise HTTPException(400, "No layers selected")
 
+    # Concurrent operation guard (Section 9.5)
+    if _active_job_id and _active_job_id in jobs and jobs[_active_job_id].status == "running":
+        active_job = jobs[_active_job_id]
+        return JSONResponse(status_code=409, content={
+            "error": "job_active",
+            "job_id": _active_job_id,
+            "job_type": active_job.job_type,
+            "message": "A job is already running.",
+        })
+
     job_id = str(uuid.uuid4())
     job = Job(id=job_id, job_type="model", settings={"req_ids": req_ids, "layers": layers, "mode": mode})
     jobs[job_id] = job
+    _active_job_id = job_id
 
     async def _run():
+        global _active_job_id
         from src.model.pipeline import run_pipeline, merge_batch_into_project
         from src.core.cost_tracker import CostTracker
 
@@ -1065,6 +1126,8 @@ async def model_run(request: Request):
         except Exception as exc:
             job.status = "failed"
             job.emit({"type": "error", "message": str(exc)})
+        finally:
+            _active_job_id = None
 
     job.task = asyncio.create_task(_run())
     return {"job_id": job_id}
@@ -1096,10 +1159,13 @@ async def model_stream(job_id: str):
 @app.post("/model/cancel/{job_id}")
 async def model_cancel(job_id: str):
     """Cancel a running model job."""
+    global _active_job_id
     job = jobs.get(job_id)
     if not job:
         raise HTTPException(404, "Job not found")
     job.cancelled = True
+    if _active_job_id == job_id:
+        _active_job_id = None
     return {"status": "cancelling", "job_id": job_id}
 
 

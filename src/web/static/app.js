@@ -143,8 +143,14 @@ function switchMode(mode) {
     // Toggle view containers
     var decompView = $('decompose-view');
     var modelView = $('model-view');
-    if (decompView) decompView.classList.toggle('hidden', mode !== 'decompose');
-    if (modelView) modelView.classList.toggle('hidden', mode !== 'model');
+    if (decompView) {
+        decompView.classList.toggle('active', mode === 'decompose');
+        decompView.classList.toggle('hidden', mode !== 'decompose');
+    }
+    if (modelView) {
+        modelView.classList.toggle('active', mode === 'model');
+        modelView.classList.toggle('hidden', mode !== 'model');
+    }
 
     // Update tab styling
     document.querySelectorAll('.mode-tab').forEach(function (btn) {
@@ -397,6 +403,9 @@ async function loadModelData() {
 // 6. DECOMPOSE MODE
 // =============================================================================
 
+// Track uploaded files
+let uploadedDecompFiles = [];
+
 // --- Upload ---
 async function handleDecompUpload(input) {
     if (!input.files || !input.files[0]) return;
@@ -414,15 +423,38 @@ async function handleDecompUpload(input) {
         var data = await res.json();
         var uploadText = $('decomp-upload-text');
         if (uploadText) {
-            uploadText.textContent = '\ud83d\udcc4 ' + file.name + ' \u2014 ' + (data.dig_count || 0) + ' DIGs';
+            uploadText.textContent = '\ud83d\udcc4 ' + file.name + ' \u2014 ' + (data.digs_loaded || data.dig_count || 0) + ' DIGs';
         }
         var fileActions = $('decomp-file-actions');
         if (fileActions) fileActions.classList.remove('hidden');
-        showToast('Loaded ' + (data.dig_count || 0) + ' DIGs from ' + file.name, 'success');
+
+        // Track uploaded file
+        uploadedDecompFiles.push({ name: file.name, type: 'reference', digs: data.digs_loaded || data.dig_count || 0 });
+        renderDecompFileList();
+
+        showToast('Loaded ' + (data.digs_loaded || data.dig_count || 0) + ' DIGs from ' + file.name, 'success');
         loadDigs();
     } catch (e) {
         showToast('Upload failed: ' + e.message, 'error');
     }
+}
+
+function triggerUploadAnother() {
+    var input = $('decomp-file-input');
+    if (input) input.click();
+}
+
+function renderDecompFileList() {
+    var listEl = $('decomp-file-list');
+    if (!listEl) return;
+    clearChildren(listEl);
+    uploadedDecompFiles.forEach(function (f) {
+        var row = el('div', { className: 'file-list-item' });
+        row.appendChild(el('span', { className: 'file-list-name', textContent: f.name }));
+        row.appendChild(el('span', { className: 'file-list-type', textContent: f.type }));
+        if (f.digs) row.appendChild(el('span', { className: 'file-list-count', textContent: f.digs + ' DIGs' }));
+        listEl.appendChild(row);
+    });
 }
 
 function handleDecompDrop(e) {
@@ -599,12 +631,34 @@ async function executeDecompRun(body) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
         });
+        if (res.status === 409) {
+            var conflict = await res.json();
+            var activeType = conflict.job_type || 'unknown';
+            if (confirm('A ' + activeType + ' job is already running. Cancel it and start decomposition?')) {
+                var cancelUrl = activeType === 'model' ? '/model/cancel/' : '/decompose/cancel/';
+                await fetch(cancelUrl + conflict.job_id, { method: 'POST' });
+                if (eventSource) { eventSource.close(); eventSource = null; }
+                // Retry after cancellation
+                setTimeout(function () { executeDecompRun(body); }, 500);
+            }
+            return;
+        }
         if (!res.ok) {
             var err = await res.json();
             showError(err.detail || 'Failed to start decomposition');
             return;
         }
         var data = await res.json();
+
+        // Show orphaned links warning if present (Section 9.1)
+        if (data.warning && data.warning.warning === 'orphaned_links') {
+            if (!confirm(data.warning.message + '\n\nProceed anyway?')) {
+                // Cancel the job that was already started
+                await fetch('/decompose/cancel/' + data.job_id, { method: 'POST' });
+                return;
+            }
+        }
+
         currentJobId = data.job_id;
         showDecompProgress();
         startSSEStream(data.job_id, 'decompose');
@@ -673,7 +727,7 @@ function renderDecompResults(results) {
     clearChildren(list);
 
     if (!results || results.length === 0) {
-        list.appendChild(el('div', { className: 'empty-state', textContent: 'No results yet. Upload requirements and run decomposition.' }));
+        list.appendChild(el('div', { className: 'empty-state', textContent: 'Upload a GTR-SDS workbook to get started, or switch to Model to upload pre-decomposed requirements' }));
         if (countEl) countEl.textContent = 'RESULTS \u2014 0 DIGS, 0 REQUIREMENTS';
         return;
     }
@@ -1147,6 +1201,18 @@ async function executeModelRun(settings) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(settings),
         });
+        if (res.status === 409) {
+            var conflict = await res.json();
+            var activeType = conflict.job_type || 'unknown';
+            if (confirm('A ' + activeType + ' job is already running. Cancel it and start model generation?')) {
+                var cancelUrl = activeType === 'decompose' ? '/decompose/cancel/' : '/model/cancel/';
+                await fetch(cancelUrl + conflict.job_id, { method: 'POST' });
+                if (eventSource) { eventSource.close(); eventSource = null; }
+                // Retry after cancellation
+                setTimeout(function () { executeModelRun(settings); }, 500);
+            }
+            return;
+        }
         if (!res.ok) {
             var err = await res.json();
             showToast(err.detail || 'Failed to start', 'error');
@@ -1225,7 +1291,7 @@ function renderModelTree(layers) {
     if (!layers || Object.keys(layers).length === 0) {
         container.appendChild(el('div', {
             className: 'empty-state',
-            textContent: 'No model loaded. Upload requirements and add a batch to build a model.',
+            textContent: 'Decompose requirements first, or upload pre-decomposed requirements (XLSX/CSV) directly',
         }));
         return;
     }
@@ -1911,6 +1977,9 @@ function handleDecompStreamEvent(event) {
             var msg = event.dig_id ? 'DIG ' + event.dig_id + ': ' + event.message : (event.message || 'Unknown error');
             showError(msg);
             if (detail) detail.textContent = 'Error: ' + msg;
+            break;
+        case 'warning':
+            showToast(event.message || 'Warning', 'info');
             break;
         case 'cancelled':
             if (label) label.textContent = 'Cancelled';
