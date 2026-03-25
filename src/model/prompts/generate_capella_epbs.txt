@@ -1,0 +1,88 @@
+You are generating Arcadia End Product Breakdown Structure (EPBS) elements for the Capella modeling tool.
+
+PURPOSE OF THIS STAGE:
+The EPBS (End Product Breakdown Structure) describes the structure of configuration items constituting the final solution. The organisation of the System-of-Interest (end product components) in a tree frame is the End Product Breakdown Structure. The EPBS is the part of the PBS related to the System under consideration in the development process. It links deliverable configuration items back to physical components defined in the Physical Architecture.
+
+ARCADIA ELEMENT DEFINITIONS:
+
+1. Configuration Items (configuration_items)
+   A Configuration Item is any hardware, software, or combination of both that satisfies an end use function and is designated for separate configuration management. Configuration items are typically referred to by an alphanumeric identifier which also serves as the unchanging base for the assignment of serial numbers to uniquely identify individual units of the CI.
+   Fields: id, name, type ("HW", "SW", "FW", "DATA", or "SERVICE"), description (string), physical_component_refs (list of physical component IDs from PA that this CI encompasses)
+
+2. PBS Structure Nodes (pbs_structure)
+   PBS nodes form a hierarchical tree that organises configuration items into a product breakdown structure. Each node can have a parent and children, forming the decomposition tree.
+   Fields: id, name, parent_id (parent node ID, or null for root nodes), children_ids (list of child node IDs), ci_ref (configuration item ID that this node represents, empty string if purely structural)
+
+---
+
+INPUT
+
+The following requirements are provided as a JSON array:
+
+{requirements}
+{existing_elements}
+---
+
+OUTPUT SCHEMA
+
+Return a JSON object with BOTH collections. Use this exact structure:
+
+{{
+  "configuration_items": [
+    {{
+      "id": "CI-001",
+      "name": "Example Configuration Item",
+      "type": "HW",
+      "description": "Description of the configuration item",
+      "physical_component_refs": ["PC-001", "PC-002"]
+    }},
+    {{
+      "id": "CI-002",
+      "name": "Example Software CI",
+      "type": "SW",
+      "description": "Software component description",
+      "physical_component_refs": ["PC-003"]
+    }}
+  ],
+  "pbs_structure": [
+    {{
+      "id": "PBS-001",
+      "name": "Root System Node",
+      "parent_id": null,
+      "children_ids": ["PBS-002", "PBS-003"],
+      "ci_ref": ""
+    }},
+    {{
+      "id": "PBS-002",
+      "name": "Subsystem A Node",
+      "parent_id": "PBS-001",
+      "children_ids": [],
+      "ci_ref": "CI-001"
+    }},
+    {{
+      "id": "PBS-003",
+      "name": "Subsystem B Node",
+      "parent_id": "PBS-001",
+      "children_ids": [],
+      "ci_ref": "CI-002"
+    }}
+  ]
+}}
+
+---
+
+OUTPUT
+
+Generate a JSON object matching the schema above, derived from the provided requirements. Return ONLY the JSON object with no additional explanation, preamble, or markdown formatting.
+
+Rules:
+1. Use exact Arcadia terminology as defined above. Do NOT invent generic systems engineering terms.
+2. Generate unique IDs with these prefixes: CI- (configuration items), PBS- (structure nodes). Use zero-padded three-digit suffixes (e.g., CI-001).
+3. The "type" field for configuration items must be one of: "HW", "SW", "FW", "DATA", "SERVICE".
+4. The "physical_component_refs" field references IDs from the Physical Architecture (use PC- prefix).
+5. Every ci_ref in pbs_structure MUST reference a valid configuration item ID (or be empty string for structural-only nodes).
+6. Every node referenced in children_ids MUST exist in the pbs_structure list with a matching parent_id.
+7. The PBS must form a valid tree: exactly one root node (parent_id is null), no cycles.
+8. If existing elements are provided, reference them by ID. Do NOT recreate existing elements.
+9. Both collections must be present in the output. Use empty lists if no applicable elements.
+10. Output ONLY valid JSON.

@@ -1,0 +1,128 @@
+You are generating step-by-step instructions for recreating an MBSE model in Capella.
+
+The instructions must be precise enough for a systems engineer to follow without prior Capella experience. Reference actual Capella 7.0 menu paths, dialog names, and toolbar actions as documented in the Capella User Manual.
+
+---
+
+INPUT — MODEL DATA
+
+The following JSON object describes the complete MBSE model to be recreated, including all Arcadia layers and their elements:
+
+{{model}}
+
+---
+
+CAPELLA TOOL REFERENCE
+
+Use these actual Capella 7.0 menu paths and actions in your steps:
+
+Project creation:
+- File > New > Capella Project — opens the New Capella Project wizard
+- Set project name in the "Project name" field, click Finish
+- The project appears in Project Explorer with all Arcadia layers pre-created
+
+Operational Analysis (OA) — Capella User Manual section 14.1–14.6:
+- In the Project Explorer, expand [ProjectName] > Operational Analysis
+- Right-click Operational Analysis > New Diagram > Operational Entity Breakdown (OEB) — top-level entity diagram
+- Right-click Operational Analysis > New Diagram > Operational Capabilities Blank (OCB) — capability diagram
+- Right-click Operational Analysis > New Diagram > Operational Activity Blank (OAB) — activity interaction diagram
+- Entities (section 14.3): Right-click "Operational Entities" > New > Operational Entity. Set name in Properties.
+- Actors (section 14.3): Right-click an Operational Entity > New > Operational Actor. Set name and description.
+- Activities (section 14.2): Right-click "Operational Activities" > New > Operational Activity. Set name, description, and linked capability in Properties.
+- Capabilities (section 14.6): Right-click "Operational Capabilities" > New > Operational Capability. Set name and involved entities.
+- Processes (section 14.4): Right-click an Operational Capability > New > Operational Process. Add activity_refs in the process properties.
+- Interactions (section 14.5): In the OAB diagram, drag an Interaction connector between two activities. Set name and exchanged items in Properties.
+- Communication Means: Right-click "Operational Entities" > New > Communication Mean. Set source_entity and target_entity.
+- Data (Operational Exchange Items): Right-click "Operational Entities" > New > Exchange Item. Set name and type.
+- Modes and States: Right-click an Operational Entity > New > Mode or New > State. Add transitions in Properties.
+
+System Needs Analysis / System Analysis (SA) — Capella User Manual section 14.13–14.15:
+- Expand [ProjectName] > System Analysis
+- Right-click System Analysis > New Diagram > System Architecture Blank (SAB) — top-level system diagram
+- Right-click System Analysis > New Diagram > Missions Capabilities Blank (MCB) — mission/capability diagram
+- Right-click System Analysis > New Diagram > System Functional Breakdown Diagram (SFBD) — function hierarchy
+- System Definition (section 14.13): Right-click "System" > Properties. Set name and description.
+- External Actors (section 14.13): Right-click "Actors" > New > System Actor. Set name, description, and actor_kind.
+- Specified Capabilities (section 14.14): Right-click "Capabilities" > New > Capability. Set name, involved_functions, and involved_chains.
+- Missions (section 14.15): Right-click "Missions" > New > Mission. Set name and associated capability_refs.
+- System Functions: Right-click "System" > New > System Function. Set name, description, and parent_function.
+- Functional Chains: Right-click "System" > New > Functional Chain. Add function_refs and exchange_refs.
+- Scenarios: Right-click "System Analysis" > New > Scenario. Select type (ES/IS/FS). Add instance roles and messages.
+- Functional Exchanges: In the SAB diagram, draw a Functional Exchange connector between functions. Set name and exchanged items.
+- Data (Exchange Items): Right-click "System" > New > Exchange Item. Set name and type.
+- Modes and States: Right-click "System" > New > Mode or New > State. Add transitions in Properties.
+
+Logical Architecture (LA) — Capella User Manual section 14.16–14.18:
+- Expand [ProjectName] > Logical Architecture
+- Right-click Logical Architecture > New Diagram > Logical Architecture Blank (LAB)
+- Right-click Logical Architecture > New Diagram > Logical Functional Breakdown Diagram (LFBD)
+- Components (section 14.17): Right-click "Logical System" > New > Logical Component. Set name, description, and kind (NODE/BEHAVIOR/UNSET).
+- Actors (section 14.17): Right-click "Logical Actors" > New > Logical Actor. Set name and actor_kind.
+- Functions (section 14.18): Right-click a Logical Component > New > Logical Function. Set name and allocated_to component.
+- Capabilities: Right-click "Capabilities" > New > Capability. Set name and involved_components.
+- Functional Chains: Right-click "Logical System" > New > Functional Chain. Add function_refs and exchange_refs.
+- Scenarios: Right-click "Logical Architecture" > New > Scenario. Add instance roles and messages.
+- Functional Exchanges: In the LAB diagram, draw a Functional Exchange connector between functions.
+- Component Exchanges: In the LAB diagram, draw a Component Exchange connector between components. Set name and conveyedFunctionalExchanges.
+- Interfaces: Right-click a Logical Component > New > Interface. Set name and owned exchange items.
+- Modes and States: Right-click a Logical Component > New > Mode or New > State. Add transitions.
+
+Physical Architecture (PA) — Capella User Manual section 14.19–14.22:
+- Expand [ProjectName] > Physical Architecture
+- Right-click Physical Architecture > New Diagram > Physical Architecture Blank (PAB)
+- Right-click Physical Architecture > New Diagram > Physical Functional Breakdown Diagram (PFBD)
+- Components (section 14.20): Right-click "Physical System" > New > Physical Component. Set name, description, and kind (NODE/BEHAVIOR/UNSET).
+- Actors (section 14.20): Right-click "Physical Actors" > New > Physical Actor. Set name and actor_kind.
+- Functions (section 14.21): Right-click a Physical Component > New > Physical Function. Set name and allocated_to component.
+- Physical Links (section 14.22): In the PAB diagram, draw a Physical Link connector between physical components. Set name, kind, and protocols.
+- Capabilities: Right-click "Capabilities" > New > Capability. Set name and involved_components.
+- Functional Chains: Right-click "Physical System" > New > Functional Chain. Add function_refs and exchange_refs.
+- Scenarios: Right-click "Physical Architecture" > New > Scenario. Add instance roles and messages.
+- Component Exchanges: In the PAB diagram, draw a Component Exchange between components.
+- Hosting: Right-click a Physical Component (NODE kind) > New > Physical Component (BEHAVIOR kind) to create a hosted sub-component. Set the deployment link in Properties.
+- Interfaces: Right-click a Physical Component > New > Interface. Set name and owned exchange items.
+- Modes and States: Right-click a Physical Component > New > Mode or New > State. Add transitions.
+
+EPBS (End Product Breakdown Structure) — Capella User Manual section 14.25:
+- Expand [ProjectName] > EPBS
+- Right-click EPBS > New Diagram > Configuration Item Breakdown
+- Configuration Items (section 14.25): Right-click "Configuration Items" > New > Configuration Item.
+  Set name, type (COTS, CS, HW, Interface, ND, PrimeItem, or System), and description.
+  In Properties > Realized Physical Components, add references to physical_component_refs.
+- PBS Structure: Right-click a Configuration Item > New > Configuration Item to create a child item.
+  Arrange the hierarchy in the Configuration Item Breakdown diagram by dragging items.
+
+Traceability links:
+- Realization (realizes): Right-click a System/Logical/Physical element > New > Realization. Select the source element from the layer above.
+- Allocation (allocates): Right-click a component > New > Functional Allocation. Select the function to allocate.
+- Right-click any element > New > Requirement Coverage — links to a requirement.
+
+---
+
+OUTPUT SCHEMA
+
+{{
+  "tool": "Capella 7.0",
+  "steps": [
+    {{"step": 1, "action": "...", "detail": "...", "layer": "..."}}
+  ]
+}}
+
+Valid values for "layer": general, operational_analysis, system_needs_analysis, logical_architecture, physical_architecture, epbs, links
+
+---
+
+OUTPUT
+
+Generate a complete ordered list of steps to recreate the model described in the INPUT above. Cover all elements across all layers in the correct order:
+1. Project creation (layer: general)
+2. Operational Analysis elements — entities, actors, activities, capabilities, processes, interactions, communication means, data, modes & states (layer: operational_analysis)
+3. System Needs Analysis elements — system definition, external actors, specified capabilities, missions, functions, functional chains, scenarios, exchanges, data, modes & states (layer: system_needs_analysis)
+4. Logical Architecture elements — components, actors, functions, capabilities, chains, scenarios, exchanges, component exchanges, interfaces, modes & states (layer: logical_architecture)
+5. Physical Architecture elements — components, actors, functions, physical links, capabilities, chains, scenarios, exchanges, hosting components, interfaces, modes & states (layer: physical_architecture)
+6. EPBS elements — configuration items and PBS structure (layer: epbs)
+7. Cross-layer traceability links — realization, allocation, requirement coverage (layer: links)
+
+Each step must have: step (integer), action (short title), detail (full instruction with exact Capella menu paths), layer (one of the valid layer values above).
+
+Return ONLY the JSON object with no explanation, preamble, or markdown formatting outside the JSON block.

@@ -1,0 +1,92 @@
+You are an expert systems engineer and IBM Rhapsody specialist. Your task is to generate step-by-step instructions for recreating a complete MBSE model in IBM Rhapsody 10.0 using the SysML profile.
+
+The instructions must be precise enough for a systems engineer to follow without prior Rhapsody experience. Reference actual Rhapsody menu paths, dialog names, toolbar actions, and the SysML profile elements.
+
+---
+
+INPUT — MODEL DATA
+
+The following JSON object describes the complete MBSE model to be recreated, including all diagram types and their elements:
+
+{model}
+
+---
+
+RHAPSODY TOOL REFERENCE
+
+Use these actual IBM Rhapsody 10.0 menu paths and actions in your steps:
+
+Project creation:
+- File > New > Project — opens the New Project dialog
+- Select "SysML" in the Profile dropdown, set project name, click OK
+- The project opens in the Model Browser on the left panel
+
+Requirements Diagram:
+- In Model Browser, right-click the package > Add New > Requirement — creates a SysML Requirement
+- Right-click diagram area > Add New Diagram > SysML Requirements Diagram
+- Drag requirements from Model Browser onto the diagram canvas
+- Right-click a requirement > Features > Tags tab — set Id, Text, and custom tags
+
+Block Definition Diagram (BDD):
+- Right-click a package > Add New Diagram > SysML Block Definition Diagram
+- Right-click diagram canvas > Add New > Block — creates a SysML Block
+- Right-click a block > Features > Properties tab > Add > Property — adds typed properties
+- Drag from toolbar: Association, Composition, Aggregation to connect blocks
+- Right-click block > Add New > Port — creates flow ports
+
+Internal Block Diagram (IBD):
+- Right-click a block in Model Browser > Add New Diagram > SysML Internal Block Diagram
+- Drag block properties (part associations) onto the canvas
+- Connect ports using the Connector tool in the diagram toolbar
+
+Activity Diagram:
+- Right-click a block or package > Add New Diagram > Activity Diagram
+- Drag Action nodes from toolbar onto canvas
+- Connect with Control Flow arrows
+- Right-click > Add New > ObjectNode for data flows
+
+Sequence Diagram:
+- Right-click a package > Add New Diagram > Sequence Diagram
+- Drag lifelines from block instances in Model Browser
+- Right-click between lifelines > Add Message — creates synchronous or asynchronous messages
+
+State Machine Diagram:
+- Right-click a block > Add New Diagram > Statechart
+- Drag State from toolbar, set name in Properties dialog
+- Right-click between states > Add New > Transition — connect states with triggers/guards
+
+Traceability links:
+- Right-click a block > Add New > SatisfyRelation — links a block to a requirement
+- Right-click > Add New > DeriveReqt — links a derived requirement to a source
+- Right-click > Add New > AllocateActivityPartition — allocates activity to block
+- Use Tools > Requirements Traceability Matrix — view all satisfy/refine/trace links
+
+---
+
+OUTPUT SCHEMA
+
+{{
+  "tool": "IBM Rhapsody 10.0",
+  "steps": [
+    {{
+      "step": 1,
+      "action": "Create Rhapsody SysML project",
+      "detail": "File > New > Project. In the New Project dialog, select 'SysML' from the Profile dropdown, enter the project name, choose a save location, and click OK. The project opens in the Model Browser.",
+      "layer": "general"
+    }},
+    {{
+      "step": 2,
+      "action": "Create Requirements Diagram",
+      "detail": "In Model Browser, right-click the top-level package > Add New Diagram > SysML Requirements Diagram. Name the diagram 'System Requirements'.",
+      "layer": "requirements_diagram"
+    }}
+  ]
+}}
+
+---
+
+OUTPUT
+
+Generate a complete ordered list of steps to recreate the model described in the INPUT above. Cover all elements across all diagram types in the correct order (project creation first, then requirements, BDD, IBD, activity, sequence, state machine, then traceability links). Each step must have: step (integer), action (short title), detail (full instruction with menu paths), layer (one of: general, requirements_diagram, block_definition, internal_block, activity_diagram, sequence_diagram, state_machine, links).
+
+Return ONLY the JSON object with no explanation, preamble, or markdown formatting outside the JSON block.

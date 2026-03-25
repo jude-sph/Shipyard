@@ -1,0 +1,191 @@
+You are generating Arcadia Physical Architecture (PA) elements for the Capella modeling tool.
+
+PURPOSE OF THIS STAGE:
+The Physical Architecture describes elements defining the finalised solution, at a level of detail sufficient to develop, integrate, and verify it. It deploys logical components onto real hardware and software nodes, defines the physical links between them, and makes concrete technology choices. This is the stage where the solution becomes implementable.
+
+ARCADIA ELEMENT DEFINITIONS:
+
+1. Physical Components (components)
+   A component performing functions (behavioral component) is a constituent of the system contributing to its behaviour and properties, by implementing functions interacting with other components. In the Physical Architecture, these are actual hardware units, software components, or network elements.
+   Fields: id, name, type ("HW_Node", "SW_Component", or "Network"), logical_components (list of logical component IDs from LA that this physical component realises)
+
+2. Design Functions (functions)
+   A design function is an action, operation, or service fulfilled by the system, or by an actor interacting with the system. These are physically hosted on a specific component.
+   Fields: id, name, physical_component (single physical component ID hosting this function)
+
+3. Physical Component Links (links)
+   A physical link is a communication means between two physical hosting components (cables, buses, network connections, etc.).
+   Fields: id, name, source (physical component ID), target (physical component ID)
+
+4. Designed Solution Capabilities (designed_capabilities)
+   A designed solution capability is the way the system provides a service that supports the achievement of a mission, notably specified capabilities.
+   Fields: id, name, involved_functions (list of function IDs), involved_chains (list of functional chain IDs)
+
+5. Design Functional Chains (functional_chains)
+   A design functional chain describes the behavior of the system in a given context. It is a logical organization of functions and functional exchanges to fulfil a Capability.
+   Fields: id, name, function_refs (list of function IDs), exchange_refs (list of functional exchange IDs)
+
+6. Design Scenarios (design_scenarios)
+   A design scenario describes the behavior of the system in a given context. It is a time-ordered set of exchanges between components, or between the system and external actors, to fulfil a Capability.
+   Fields: id, name, steps (list of step objects)
+   Each step: from_entity (component ID or function ID), to_entity (component ID or function ID), message (string), sequence (integer)
+
+7. Design Functional Exchanges (functional_exchanges)
+   A design functional exchange is an interaction from a source function likely to deliver exchange items to another function (information, signal, material, torque, etc.).
+   Fields: id, name, source_function (function ID), target_function (function ID), exchanged_items (list of exchanged item IDs)
+
+8. Design Exchanged Items (exchanged_items)
+   A design exchange contents describes what is exchanged by the system, system components, actors, and functions allocated to each of them.
+   Fields: id, name, description (string)
+
+9. Component Exchanges (component_exchanges)
+   A (behavioral) component exchange is an interaction between two components likely to exchange some items (information, signal, material, torque, etc.). It realises functional exchanges between functions allocated to source and target components.
+   Fields: id, name, source_component (physical component ID), target_component (physical component ID)
+
+10. Physical Hosting Components (hosting_components)
+    A physical hosting component is a component hosting behavioural components, delivering them required resources and support for interactions or communications between them.
+    Fields: id, name, hosted_components (list of physical component IDs that are hosted)
+
+11. Designed Interfaces (interfaces)
+    Interfaces group various exchange items, and are allocated to behavioural component exchanges.
+    Fields: id, name, component_exchange_ref (single component exchange ID), exchange_items (list of exchanged item IDs)
+
+12. Design Modes & States (modes_and_states)
+    An automaton describes how modes and states are linked by transitions; it is linked to the appropriate object (system, component, etc.).
+    Fields: id, name, type ("Mode" or "State"), transitions (list of objects with "from", "to", "trigger" keys)
+
+---
+
+INPUT
+
+The following requirements are provided as a JSON array:
+
+{requirements}
+{existing_elements}
+---
+
+OUTPUT SCHEMA
+
+Return a JSON object with ALL 12 collections. Use this exact structure:
+
+{{
+  "components": [
+    {{
+      "id": "PC-001",
+      "name": "Example Hardware Unit",
+      "type": "HW_Node",
+      "logical_components": ["LC-001"]
+    }}
+  ],
+  "functions": [
+    {{
+      "id": "PF-001",
+      "name": "Example Physical Function",
+      "physical_component": "PC-001"
+    }}
+  ],
+  "links": [
+    {{
+      "id": "PL-001",
+      "name": "Example Physical Link",
+      "source": "PC-001",
+      "target": "PC-002"
+    }}
+  ],
+  "designed_capabilities": [
+    {{
+      "id": "DC-001",
+      "name": "Example Capability",
+      "involved_functions": ["PF-001"],
+      "involved_chains": ["PFC-001"]
+    }}
+  ],
+  "functional_chains": [
+    {{
+      "id": "PFC-001",
+      "name": "Example Chain",
+      "function_refs": ["PF-001", "PF-002"],
+      "exchange_refs": ["PFE-001"]
+    }}
+  ],
+  "design_scenarios": [
+    {{
+      "id": "DS-001",
+      "name": "Example Scenario",
+      "steps": [
+        {{
+          "from_entity": "PC-001",
+          "to_entity": "PC-002",
+          "message": "Data Transfer",
+          "sequence": 1
+        }}
+      ]
+    }}
+  ],
+  "functional_exchanges": [
+    {{
+      "id": "PFE-001",
+      "name": "Example Exchange",
+      "source_function": "PF-001",
+      "target_function": "PF-002",
+      "exchanged_items": ["PEI-001"]
+    }}
+  ],
+  "exchanged_items": [
+    {{
+      "id": "PEI-001",
+      "name": "Example Exchanged Item",
+      "description": "What is exchanged"
+    }}
+  ],
+  "component_exchanges": [
+    {{
+      "id": "PCE-001",
+      "name": "Example Component Exchange",
+      "source_component": "PC-001",
+      "target_component": "PC-002"
+    }}
+  ],
+  "hosting_components": [
+    {{
+      "id": "HC-001",
+      "name": "Example Hosting Component",
+      "hosted_components": ["PC-001", "PC-002"]
+    }}
+  ],
+  "interfaces": [
+    {{
+      "id": "DI-001",
+      "name": "Example Interface",
+      "component_exchange_ref": "PCE-001",
+      "exchange_items": ["PEI-001"]
+    }}
+  ],
+  "modes_and_states": [
+    {{
+      "id": "PMS-001",
+      "name": "Example State",
+      "type": "State",
+      "transitions": [{{"from": "PMS-001", "to": "PMS-002", "trigger": "Event Name"}}]
+    }}
+  ]
+}}
+
+---
+
+OUTPUT
+
+Generate a JSON object matching the schema above, derived from the provided requirements. Return ONLY the JSON object with no additional explanation, preamble, or markdown formatting.
+
+Rules:
+1. Use exact Arcadia terminology as defined above. Do NOT invent generic systems engineering terms.
+2. Generate unique IDs with these prefixes: PC- (components), PF- (functions), PL- (links), DC- (designed capabilities), PFC- (functional chains), DS- (design scenarios), PFE- (functional exchanges), PEI- (exchanged items), PCE- (component exchanges), HC- (hosting components), DI- (interfaces), PMS- (modes/states). Use zero-padded three-digit suffixes (e.g., PC-001).
+3. Every physical component referenced in functions, links, component_exchanges, or hosting_components MUST exist in the components list.
+4. The "physical_component" field in each function MUST reference a valid component ID.
+5. The "type" field for components must be one of: "HW_Node", "SW_Component", "Network".
+6. The "logical_components" field references IDs from the Logical Architecture (use LC- prefix).
+7. Every function and exchange referenced in functional_chains MUST exist in their respective lists.
+8. Every exchanged item referenced in functional_exchanges or interfaces MUST exist in the exchanged_items list.
+9. If existing elements are provided, reference them by ID. Do NOT recreate existing elements.
+10. All 12 collections must be present in the output. Use empty lists for collections that have no applicable elements.
+11. Output ONLY valid JSON.

@@ -1,0 +1,164 @@
+You are generating Arcadia System Needs Analysis (SA) elements for the Capella modeling tool.
+
+PURPOSE OF THIS STAGE:
+The System Needs Analysis defines expectations on the system contents and boundaries, as required by the customer and other stakeholders. The system-of-interest is treated as a black box: you define WHAT the system must do (specified functions) and the exchanges flowing between those functions and with external actors. You do NOT decompose the system into subsystems at this stage.
+
+ARCADIA ELEMENT DEFINITIONS:
+
+1. Specified Functions (functions)
+   A specified function is an action, operation, or service expected from the system, or fulfilled by an actor interacting with the system.
+   Fields: id, name, inputs (list of input name strings), outputs (list of output name strings)
+
+2. Specified Functional Exchanges (exchanges)
+   A specified functional exchange is an interaction from a source function likely to deliver exchange items to another function (information, signal, material, torque, etc.).
+   Fields: id, name, source (function ID or external actor name), target (function ID or external actor name)
+
+3. System Definitions (system_definitions)
+   The system of interest or solution to be delivered to customers (could be a software, a service, hardware, etc.).
+   Fields: id, name, description (string)
+
+4. External Systems/Actors (external_actors)
+   An external actor is an external entity, organisation, system, or human interacting with the system via its interfaces.
+   Fields: id, name, type (default "System"; use "Human" for human actors)
+
+5. Specified Capabilities (specified_capabilities)
+   A specified capability is the ability required from the system, to provide a service that supports the achievement of a mission.
+   Fields: id, name, involved_functions (list of function IDs), involved_chains (list of functional chain IDs)
+
+6. Specified Functional Chains (functional_chains)
+   A functional chain describes a usage of the system in a given context. It is a logical organization of functions and functional exchanges to fulfil a Capability.
+   Fields: id, name, function_refs (list of function IDs in the chain), exchange_refs (list of exchange IDs in the chain)
+
+7. Specified Scenarios (specified_scenarios)
+   A specified scenario describes a usage of the system in a given context. It is a time-ordered set of functional exchanges between functions, or between the system and external actors, to fulfil a Capability.
+   Fields: id, name, steps (list of step objects)
+   Each step: from_entity (function ID or actor ID), to_entity (function ID or actor ID), message (string), sequence (integer)
+
+8. Specified Data (specified_data)
+   Elements of interactions or communications between system and actors (or inside the system). Data can be referenced and grouped into exchange items.
+   Fields: id, name, description (string)
+
+9. Specified Exchanged Items (exchanged_items)
+   A specified exchange contents describes what is expected to be exchanged by the system, actors, and functions allocated to each of them.
+   Fields: id, name, description (string)
+
+10. Specified Modes & States (modes_and_states)
+    An automaton describes how modes and states are linked by transitions; it is linked to the system.
+    Fields: id, name, type ("Mode" or "State"), transitions (list of objects with "from", "to", "trigger" keys)
+
+---
+
+INPUT
+
+The following requirements are provided as a JSON array:
+
+{requirements}
+{existing_elements}
+---
+
+OUTPUT SCHEMA
+
+Return a JSON object with ALL 10 collections. Use this exact structure:
+
+{{
+  "functions": [
+    {{
+      "id": "SF-001",
+      "name": "Example Function",
+      "inputs": ["Input Signal"],
+      "outputs": ["Output Data"]
+    }}
+  ],
+  "exchanges": [
+    {{
+      "id": "SFE-001",
+      "name": "Example Exchange",
+      "source": "SF-001",
+      "target": "SF-002"
+    }}
+  ],
+  "system_definitions": [
+    {{
+      "id": "SYS-001",
+      "name": "System of Interest",
+      "description": "The system being specified"
+    }}
+  ],
+  "external_actors": [
+    {{
+      "id": "EA-001",
+      "name": "External Actor Name",
+      "type": "System"
+    }}
+  ],
+  "specified_capabilities": [
+    {{
+      "id": "SC-001",
+      "name": "Example Capability",
+      "involved_functions": ["SF-001"],
+      "involved_chains": ["SFC-001"]
+    }}
+  ],
+  "functional_chains": [
+    {{
+      "id": "SFC-001",
+      "name": "Example Chain",
+      "function_refs": ["SF-001", "SF-002"],
+      "exchange_refs": ["SFE-001"]
+    }}
+  ],
+  "specified_scenarios": [
+    {{
+      "id": "SS-001",
+      "name": "Example Scenario",
+      "steps": [
+        {{
+          "from_entity": "EA-001",
+          "to_entity": "SF-001",
+          "message": "Request Signal",
+          "sequence": 1
+        }}
+      ]
+    }}
+  ],
+  "specified_data": [
+    {{
+      "id": "SD-001",
+      "name": "Example Data",
+      "description": "Data description"
+    }}
+  ],
+  "exchanged_items": [
+    {{
+      "id": "SEI-001",
+      "name": "Example Exchanged Item",
+      "description": "What is exchanged"
+    }}
+  ],
+  "modes_and_states": [
+    {{
+      "id": "SMS-001",
+      "name": "Example State",
+      "type": "State",
+      "transitions": [{{"from": "SMS-001", "to": "SMS-002", "trigger": "Event Name"}}]
+    }}
+  ]
+}}
+
+---
+
+OUTPUT
+
+Generate a JSON object matching the schema above, derived from the provided requirements. Return ONLY the JSON object with no additional explanation, preamble, or markdown formatting.
+
+Rules:
+1. Use exact Arcadia terminology as defined above. Do NOT invent generic systems engineering terms.
+2. Generate unique IDs with these prefixes: SYS- (system definitions), EA- (external actors), SC- (specified capabilities), SF- (functions), SFC- (functional chains), SS- (specified scenarios), SFE- (functional exchanges), SD- (specified data), SEI- (exchanged items), SMS- (modes/states). Use zero-padded three-digit suffixes (e.g., SF-001).
+3. Every function referenced in exchanges, capabilities, chains, or scenarios MUST exist in the functions list.
+4. Every exchange referenced in functional_chains MUST exist in the exchanges list.
+5. Exchanges that cross the system boundary may use external actor IDs (e.g., "EA-001") as source or target.
+6. Keep the system as a black box -- do NOT decompose into subsystems.
+7. If existing elements are provided, reference them by ID. Do NOT recreate existing elements.
+8. Derive all elements directly from the provided requirements.
+9. All 10 collections must be present in the output. Use empty lists for collections that have no applicable elements.
+10. Output ONLY valid JSON.

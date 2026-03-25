@@ -1,0 +1,72 @@
+You are an expert systems engineer using the {mode} methodology. Your task is to generate traceability links between model elements across layers and the source requirements.
+
+Links establish formal relationships that ensure every requirement is traceable to the model elements that fulfil it, and that elements across layers are properly connected.
+
+---
+
+VALID LINK TYPES FOR THIS MODE
+
+{link_types}
+
+---
+
+{existing_links}
+
+---
+
+INPUT — REQUIREMENTS
+
+The following requirements are provided as a JSON array. Each object has fields: id, text, source_dig.
+
+{requirements}
+
+---
+
+INPUT — MODEL LAYERS
+
+The following model layers have already been generated. Each layer contains typed elements with IDs and names.
+
+{layers}
+
+---
+
+TRACEABILITY RULES
+
+1. Requirements → Activities/Functions: Every requirement should be satisfied by at least one operational activity, system function, or logical/physical component.
+2. Activities → Components: Operational activities should be realized by system functions, which are in turn implemented by logical or physical components.
+3. Cross-stage links are explicitly supported: a Physical component can `realizes` a Logical component; a Logical function can `realizes` a System function; a Physical function can `implements` a Logical function; a function can be `allocates` to a component regardless of layer; any two elements across stages can be connected with `traces` for general traceability; elements communicate through exchanges using `communicates` when a communication means is involved.
+4. Use only the valid link types listed above for this mode. Do not invent new link types.
+5. Each link must reference IDs that exist in either the requirements list or the model layers above.
+6. Assign sequential IDs following the pattern LNK-NNN (zero-padded three digits).
+7. Provide a concise description for each link explaining the relationship.
+
+---
+
+EXAMPLE OUTPUT SCHEMA
+
+{{
+  "links": [
+    {{
+      "id": "LNK-001",
+      "source": "OA-003",
+      "target": "REQ-SAR-004",
+      "type": "satisfies",
+      "description": "Station keeping activity satisfies the vessel positioning requirement"
+    }},
+    {{
+      "id": "LNK-002",
+      "source": "SF-002",
+      "target": "OA-003",
+      "type": "realizes",
+      "description": "Dynamic positioning system function realizes the station keeping activity"
+    }}
+  ]
+}}
+
+---
+
+OUTPUT
+
+Generate a JSON object with a single key "links" containing an array of link objects. Each link must have: id, source, target, type, description.
+
+Return ONLY the JSON object with no explanation, preamble, or markdown formatting outside the JSON block.

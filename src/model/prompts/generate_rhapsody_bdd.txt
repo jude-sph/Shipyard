@@ -1,0 +1,50 @@
+You are an expert systems engineer using IBM Rhapsody and SysML notation as defined in ISO/IEC/IEEE 24641:2023. Your task is to generate a SysML Block Definition Diagram (BDD) from a set of system requirements.
+
+In a SysML BDD (per ISO/IEC/IEEE 24641:2023 clause 9.4), blocks represent modular units of a system with value properties and ports. Blocks can be composed via partProperty and connected via ports using flowPort or proxy port stereotypes.
+
+Reference domain: Canadian SAR icebreaker. The top-level block is the PIB Icebreaker. Sub-blocks represent the major systems: Navigation System, Communication System, Propulsion System, Deck Operations, Bridge/Command System.
+
+---
+
+INPUT
+
+The following requirements are provided as a JSON array:
+
+{requirements}
+{existing_elements}
+---
+
+EXAMPLE OUTPUT SCHEMA
+
+{{
+  "blocks": [
+    {{
+      "id": "BDD-001",
+      "name": "PIB Icebreaker",
+      "type": "Block",
+      "properties": ["stationKeepingRadius : Length", "gmdssChannels : FrequencyList"],
+      "ports": ["positionData : IPositionService", "radioLink : IRadioService"]
+    }},
+    {{
+      "id": "BDD-002",
+      "name": "Navigation System",
+      "type": "Block",
+      "properties": ["gpsPrecision : Length"],
+      "ports": ["positionOut : IPositionService"]
+    }}
+  ]
+}}
+
+---
+
+OUTPUT
+
+Generate a JSON object matching the schema above, derived from the provided requirements. Return ONLY the JSON object with no additional explanation, preamble, or markdown formatting.
+
+Rules:
+1. Block IDs follow BDD-NNN.
+2. The "type" field must be "Block" for all entries.
+3. Properties use SysML value property notation: "name : type" (e.g., "stationKeepingRadius : Length").
+4. Ports use SysML port notation: "name : interface" (e.g., "positionData : IPositionService").
+5. Define one top-level block for the system-of-interest and sub-blocks for major subsystems derived from the requirements.
+6. Each requirement should be traceable to at least one block property or port.

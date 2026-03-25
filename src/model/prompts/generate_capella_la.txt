@@ -1,0 +1,167 @@
+You are generating Arcadia Logical Architecture (LA) elements for the Capella modeling tool.
+
+PURPOSE OF THIS STAGE:
+The Logical Architecture describes the major elements defining the notional solution in a synthetic manner. It opens the system black box into logical subsystems (components), allocates functions to those components, and defines the notional functional exchanges and component exchanges between them. Technology choices are NOT made here -- this is a technology-independent decomposition.
+
+ARCADIA ELEMENT DEFINITIONS:
+
+1. Logical Components (components)
+   A component performing functions (behavioral component) is a constituent of the system contributing to its behaviour and properties, by implementing functions interacting with other components.
+   Fields: id, name, functions (list of logical function IDs allocated to this component)
+
+2. Logical Functions (functions)
+   A notional function is an action, operation, or service fulfilled by the system, or by an actor interacting with the system.
+   Fields: id, name, component (single component ID to which this function is allocated)
+
+3. Notional Solution Capabilities (notional_capabilities)
+   A notional solution capability is the way the system provides a service that supports the achievement of a mission, notably specified capabilities.
+   Fields: id, name, involved_functions (list of function IDs), involved_chains (list of functional chain IDs)
+
+4. Notional Functional Chains (functional_chains)
+   A notional functional chain describes the behavior of the system in a given context. It is a logical organization of functions and functional exchanges to fulfil a Capability.
+   Fields: id, name, function_refs (list of function IDs in the chain), exchange_refs (list of functional exchange IDs in the chain)
+
+5. Notional Scenarios (notional_scenarios)
+   A notional scenario describes the behavior of the system in a given context. It is a time-ordered set of functional exchanges between functions, or between the system and external actors, to fulfil a Capability.
+   Fields: id, name, steps (list of step objects)
+   Each step: from_entity (function ID or component ID), to_entity (function ID or component ID), message (string), sequence (integer)
+
+6. Notional Functional Exchanges (functional_exchanges)
+   A notional functional exchange is an interaction from a source function likely to deliver exchange items to another function (information, signal, material, torque, etc.).
+   Fields: id, name, source_function (function ID), target_function (function ID), exchanged_items (list of exchanged item IDs)
+
+7. Notional Exchanged Items (exchanged_items)
+   A notional exchange contents describes what is exchanged by the system, system components, actors, and functions allocated to each of them.
+   Fields: id, name, description (string)
+
+8. Notional Component Exchanges (component_exchanges)
+   A (behavioral) component exchange is an interaction between two components likely to exchange some items (information, signal, material, torque, etc.). It realises functional exchanges between functions allocated to source and target components.
+   Fields: id, name, source_component (component ID), target_component (component ID)
+
+9. Notional Interfaces (interfaces)
+   Interfaces group various exchange items, and are allocated to behavioural component exchanges.
+   Fields: id, name, component_exchange_ref (single component exchange ID), exchange_items (list of exchanged item IDs)
+
+10. Notional Modes & States (modes_and_states)
+    An automaton describes how modes and states are linked by transitions; it is linked to the appropriate object (system, component, etc.).
+    Fields: id, name, type ("Mode" or "State"), transitions (list of objects with "from", "to", "trigger" keys)
+
+---
+
+INPUT
+
+The following requirements are provided as a JSON array:
+
+{requirements}
+{existing_elements}
+---
+
+OUTPUT SCHEMA
+
+Return a JSON object with ALL 10 collections. Use this exact structure:
+
+{{
+  "components": [
+    {{
+      "id": "LC-001",
+      "name": "Example Component",
+      "functions": ["LF-001", "LF-002"]
+    }}
+  ],
+  "functions": [
+    {{
+      "id": "LF-001",
+      "name": "Example Function",
+      "component": "LC-001"
+    }}
+  ],
+  "notional_capabilities": [
+    {{
+      "id": "NC-001",
+      "name": "Example Capability",
+      "involved_functions": ["LF-001"],
+      "involved_chains": ["LFC-001"]
+    }}
+  ],
+  "functional_chains": [
+    {{
+      "id": "LFC-001",
+      "name": "Example Chain",
+      "function_refs": ["LF-001", "LF-002"],
+      "exchange_refs": ["LFE-001"]
+    }}
+  ],
+  "notional_scenarios": [
+    {{
+      "id": "NS-001",
+      "name": "Example Scenario",
+      "steps": [
+        {{
+          "from_entity": "LF-001",
+          "to_entity": "LF-002",
+          "message": "Data Transfer",
+          "sequence": 1
+        }}
+      ]
+    }}
+  ],
+  "functional_exchanges": [
+    {{
+      "id": "LFE-001",
+      "name": "Example Exchange",
+      "source_function": "LF-001",
+      "target_function": "LF-002",
+      "exchanged_items": ["LEI-001"]
+    }}
+  ],
+  "exchanged_items": [
+    {{
+      "id": "LEI-001",
+      "name": "Example Exchanged Item",
+      "description": "What is exchanged"
+    }}
+  ],
+  "component_exchanges": [
+    {{
+      "id": "LCE-001",
+      "name": "Example Component Exchange",
+      "source_component": "LC-001",
+      "target_component": "LC-002"
+    }}
+  ],
+  "interfaces": [
+    {{
+      "id": "LI-001",
+      "name": "Example Interface",
+      "component_exchange_ref": "LCE-001",
+      "exchange_items": ["LEI-001"]
+    }}
+  ],
+  "modes_and_states": [
+    {{
+      "id": "LMS-001",
+      "name": "Example State",
+      "type": "State",
+      "transitions": [{{"from": "LMS-001", "to": "LMS-002", "trigger": "Event Name"}}]
+    }}
+  ]
+}}
+
+---
+
+OUTPUT
+
+Generate a JSON object matching the schema above, derived from the provided requirements. Return ONLY the JSON object with no additional explanation, preamble, or markdown formatting.
+
+Rules:
+1. Use exact Arcadia terminology as defined above. Do NOT invent generic systems engineering terms.
+2. Generate unique IDs with these prefixes: LC- (components), LF- (functions), NC- (notional capabilities), LFC- (functional chains), NS- (notional scenarios), LFE- (functional exchanges), LEI- (exchanged items), LCE- (component exchanges), LI- (interfaces), LMS- (modes/states). Use zero-padded three-digit suffixes (e.g., LC-001).
+3. Every function ID listed inside a component's "functions" array MUST have a corresponding entry in the top-level "functions" list, and vice versa.
+4. The "component" field in each function MUST reference a valid component ID.
+5. Every function and exchange referenced in functional_chains MUST exist in their respective lists.
+6. Every exchanged item referenced in functional_exchanges or interfaces MUST exist in the exchanged_items list.
+7. Every component exchange referenced in interfaces MUST exist in the component_exchanges list.
+8. Allocate functions to components based on functional and logical affinity.
+9. If existing elements are provided, reference them by ID. Do NOT recreate existing elements.
+10. All 10 collections must be present in the output. Use empty lists for collections that have no applicable elements.
+11. Output ONLY valid JSON.

@@ -1,0 +1,62 @@
+You are an expert systems engineer using IBM Rhapsody and SysML notation as defined in ISO/IEC/IEEE 24641:2023. Your task is to generate a SysML Sequence Diagram from a set of system requirements.
+
+In a SysML Sequence Diagram (per ISO/IEC/IEEE 24641:2023 clause 9.8), lifelines represent participants (blocks or actors) and messages show the time-ordered interactions between them. Combined fragments (alt, loop, opt) model conditional and repetitive behaviour.
+
+Reference domain: Canadian SAR icebreaker. Key lifelines include: PIB Icebreaker, JRCC, MCTS, Crew, Distressed Vessel. Interactions cover: SAR tasking, transit, scene arrival, FRC deployment, communications, station-keeping activation.
+
+---
+
+INPUT
+
+The following requirements are provided as a JSON array:
+
+{requirements}
+{existing_elements}
+---
+
+EXAMPLE OUTPUT SCHEMA
+
+{{
+  "lifelines": [
+    {{
+      "id": "SEQ-L-001",
+      "name": "PIB Icebreaker",
+      "represents": "Block"
+    }},
+    {{
+      "id": "SEQ-L-002",
+      "name": "JRCC Halifax",
+      "represents": "Actor"
+    }}
+  ],
+  "messages": [
+    {{
+      "id": "SEQ-M-001",
+      "from_lifeline": "SEQ-L-002",
+      "to_lifeline": "SEQ-L-001",
+      "message": "requestSAR(position, distressType)",
+      "sequence": 1
+    }},
+    {{
+      "id": "SEQ-M-002",
+      "from_lifeline": "SEQ-L-001",
+      "to_lifeline": "SEQ-L-002",
+      "message": "acknowledgeTask(estimatedArrival)",
+      "sequence": 2
+    }}
+  ]
+}}
+
+---
+
+OUTPUT
+
+Generate a JSON object matching the schema above, derived from the provided requirements. Return ONLY the JSON object with no additional explanation, preamble, or markdown formatting.
+
+Rules:
+1. Lifeline IDs follow SEQ-L-NNN, message IDs follow SEQ-M-NNN.
+2. The "represents" field must be "Block" for system components or "Actor" for external participants.
+3. Messages must reference valid lifeline IDs in from_lifeline and to_lifeline.
+4. The "sequence" field must be a positive integer and messages must be ordered consistently (1, 2, 3...).
+5. Message names should be SysML-style operation calls or signals (e.g., "requestSAR()", "reportPosition(lat, lon)", "activateDPMode()").
+6. Model the primary success scenario, tracing interactions required by the given requirements.
