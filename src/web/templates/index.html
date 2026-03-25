@@ -170,8 +170,12 @@
                 <!-- Layers -->
                 <div class="sidebar-section">
                     <label class="section-label">LAYERS</label>
-                    <div id="layer-checkboxes">
-                        <!-- Populated by JS from config -->
+                    <div id="layer-checkboxes" class="layer-group">
+                        <label class="layer-checkbox"><input type="checkbox" value="operational_analysis" checked onchange="readSelectedLayers()"> Operational Analysis (OA)</label>
+                        <label class="layer-checkbox"><input type="checkbox" value="system_needs_analysis" checked onchange="readSelectedLayers()"> System Needs Analysis (SA)</label>
+                        <label class="layer-checkbox"><input type="checkbox" value="logical_architecture" checked onchange="readSelectedLayers()"> Logical Architecture (LA)</label>
+                        <label class="layer-checkbox"><input type="checkbox" value="physical_architecture" checked onchange="readSelectedLayers()"> Physical Architecture (PA)</label>
+                        <label class="layer-checkbox"><input type="checkbox" value="epbs" onchange="readSelectedLayers()"> EPBS</label>
                     </div>
                 </div>
 

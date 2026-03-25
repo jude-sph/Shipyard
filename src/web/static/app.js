@@ -76,7 +76,9 @@ document.addEventListener('DOMContentLoaded', function () {
     initModeSwitch();
     initDragDrop();
     initTabSwitching();
-    initLayerCheckboxes();
+    // Layer checkboxes are hardcoded in HTML for initial Capella mode.
+    // initLayerCheckboxes() is called by setToolMode() when switching to Rhapsody.
+    readSelectedLayers();
     initProviderSelector(cfg.settings);
     initAutoSendToggle(cfg.settings);
     renderSuggestedPrompts(currentMode);
