@@ -541,11 +541,11 @@
     <!-- Data for JavaScript -->
     <script>
         const SHIPYARD_CONFIG = {
-            modelCatalogue: {{ model_catalogue | tojson }},
-            capellaLayers: {{ capella_layers | tojson }},
-            rhapsodyDiagrams: {{ rhapsody_diagrams | tojson }},
-            settings: {{ settings | tojson }},
-            project: {{ project | tojson }},
+            modelCatalogue: {{ model_catalogue | safe }},
+            capellaLayers: {{ capella_layers | safe }},
+            rhapsodyDiagrams: {{ rhapsody_diagrams | safe }},
+            settings: {{ settings | safe }},
+            project: {{ project | safe }},
         };
     </script>
     <script src="/static/app.js"></script>

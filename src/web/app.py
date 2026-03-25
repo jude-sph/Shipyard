@@ -119,30 +119,32 @@ def _require_project() -> ProjectModel:
 async def index(request: Request):
     """Root endpoint. Renders the SPA shell or returns JSON status."""
     if templates is not None:
-        project_data = (
-            json.loads(current_project.model_dump_json())
-            if current_project else None
-        )
-        settings_data = {
-            "provider": config.PROVIDER,
-            "model": config.MODEL,
-            "decompose_model": config.DECOMPOSE_MODEL,
-            "mbse_model": config.MBSE_MODEL,
-            "default_mode": config.DEFAULT_MODE,
-            "anthropic_key_set": bool(config.ANTHROPIC_API_KEY),
-            "openrouter_key_set": bool(config.OPENROUTER_API_KEY),
-            "local_url": config.LOCAL_LLM_URL,
-            "auto_send": True,
-        }
-        return templates.TemplateResponse("index.html", {
-            "request": request,
-            "model_catalogue": MODEL_CATALOGUE,
-            "capella_layers": CAPELLA_LAYERS,
-            "rhapsody_diagrams": RHAPSODY_DIAGRAMS,
-            "settings": settings_data,
-            "project": project_data,
-        })
-    # Fallback JSON if templates directory is missing
+        try:
+            project_data = (
+                json.loads(current_project.model_dump_json())
+                if current_project else None
+            )
+            settings_data = {
+                "provider": config.PROVIDER,
+                "model": config.MODEL,
+                "decompose_model": config.DECOMPOSE_MODEL,
+                "mbse_model": config.MBSE_MODEL,
+                "default_mode": config.DEFAULT_MODE,
+                "anthropic_key_set": bool(config.ANTHROPIC_API_KEY),
+                "openrouter_key_set": bool(config.OPENROUTER_API_KEY),
+                "local_url": config.LOCAL_LLM_URL,
+                "auto_send": True,
+            }
+            return templates.TemplateResponse("index.html", {
+                "request": request,
+                "model_catalogue": json.dumps(MODEL_CATALOGUE),
+                "capella_layers": json.dumps(CAPELLA_LAYERS),
+                "rhapsody_diagrams": json.dumps(RHAPSODY_DIAGRAMS),
+                "settings": json.dumps(settings_data),
+                "project": json.dumps(project_data),
+            })
+        except Exception:
+            pass  # Fall through to JSON fallback
     return {
         "app": "Shipyard",
         "status": "running",
