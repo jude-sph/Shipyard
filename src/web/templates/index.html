@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shipyard</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+    <!-- Top Bar -->
+    <header id="top-bar">
+        <div class="header-left">
+            <span class="logo">&#9875; Shipyard</span>
+            <span class="version">v1.0.0</span>
+            <!-- Mode tabs -->
+            <div class="mode-tabs">
+                <button class="mode-tab active" data-mode="decompose" onclick="switchMode('decompose')">Decompose</button>
+                <button class="mode-tab" data-mode="model" onclick="switchMode('model')">Model</button>
+            </div>
+            <!-- Project selector -->
+            <div class="project-selector">
+                <button id="project-btn" onclick="toggleProjectDropdown()">&#9662; <span id="project-name">No Project</span></button>
+                <div id="project-dropdown" class="dropdown hidden">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+        </div>
+        <div class="header-right">
+            <span class="auto-send-toggle" onclick="toggleAutoSend()">Auto-send: <span id="auto-send-status">ON</span></span>
+            <span class="model-indicator"><span class="dot"></span> <span id="active-model">claude-sonnet-4-6</span></span>
+            <button class="btn-icon" onclick="openSettings()">&#9881; Settings</button>
+            <button id="agent-toggle" class="btn-icon" onclick="toggleAgent()">&#9670; Agent</button>
+        </div>
+    </header>
+
+    <!-- Update Banner -->
+    <div id="update-banner" class="update-banner hidden">
+        <span>&#8505; Shipyard <span id="update-version"></span> is available.</span>
+        <a onclick="openSettings()">Update in Settings</a>
+        <button class="btn-dismiss" onclick="dismissBanner()">&#10005;</button>
+    </div>
+
+    <!-- Error Banner -->
+    <div id="error-banner" class="error-banner hidden">
+        <span id="error-text"></span>
+        <button class="btn-dismiss" onclick="this.parentElement.classList.add('hidden')">&#10005;</button>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- DECOMPOSE MODE                                                    -->
+    <!-- ================================================================= -->
+    <div id="decompose-view" class="view-container">
+
+        <!-- Input Section -->
+        <section class="input-section">
+            <div class="input-row">
+                <!-- Upload area -->
+                <div class="upload-col">
+                    <div id="decomp-upload-area" class="upload-area"
+                         onclick="document.getElementById('decomp-file-input').click()"
+                         ondragover="handleDragOver(event)"
+                         ondragleave="handleDragLeave(event)"
+                         ondrop="handleDecompDrop(event)">
+                        <input type="file" id="decomp-file-input" accept=".xlsx,.xls,.csv"
+                               style="display:none" onchange="handleDecompUpload(this)">
+                        <div id="decomp-upload-text">
+                            &#128194; Drop xlsx here or click to upload
+                        </div>
+                    </div>
+                    <div id="decomp-file-actions" class="file-actions hidden">
+                        <a id="decomp-download-source" href="/decompose/download-source" class="btn-secondary">&#11015; Source XLSX</a>
+                        <a id="decomp-download-results" href="/decompose/export" class="btn-secondary">&#11015; Results XLSX</a>
+                    </div>
+                </div>
+
+                <!-- Controls -->
+                <div class="decomp-controls">
+                    <div class="slider-row">
+                        <label>Depth</label>
+                        <input type="range" id="decomp-depth" min="1" max="4" value="3"
+                               oninput="this.nextElementSibling.textContent=this.value">
+                        <span>3</span>
+                    </div>
+                    <div class="slider-row">
+                        <label>Breadth</label>
+                        <input type="range" id="decomp-breadth" min="1" max="25" value="2"
+                               oninput="this.nextElementSibling.textContent=this.value">
+                        <span>2</span>
+                    </div>
+                    <div class="checkbox-row">
+                        <label><input type="checkbox" id="decomp-vv" checked> V&amp;V</label>
+                        <span class="info-tip" onclick="showInfoTip(this, 'Verification &amp; Validation: Generates acceptance criteria, verification methods, events, and test cases. Adds ~1 API call per requirement node.')">&#9432;</span>
+                        <label><input type="checkbox" id="decomp-judge" checked> Judge</label>
+                        <span class="info-tip" onclick="showInfoTip(this, 'Semantic Judge: Independent LLM review of the full requirement tree. Checks parent-child coherence, allocations, specificity, and V&amp;V quality. Adds 2-3 API calls per DIG.')">&#9432;</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- DIG search + Run bar -->
+            <div class="run-bar">
+                <div class="dig-picker-wrap">
+                    <div id="dig-tags" class="dig-tags"></div>
+                    <input type="text" id="dig-search" class="dig-input"
+                           placeholder="Search DIGs or leave blank for all"
+                           onfocus="showDigDropdown()" oninput="filterDigDropdown()">
+                    <div id="dig-dropdown" class="dig-dropdown hidden"></div>
+                </div>
+                <button class="btn-run" onclick="startDecompose()">&#9654; Run</button>
+                <button class="btn-secondary" onclick="estimateDecompCost()">Est. Cost</button>
+            </div>
+        </section>
+
+        <!-- Progress Section -->
+        <section id="decomp-progress" class="progress-section hidden">
+            <div class="progress-header">
+                <span id="decomp-progress-label">Processing...</span>
+                <span id="decomp-progress-cost" class="progress-cost"></span>
+            </div>
+            <div class="progress-bar-container">
+                <div id="decomp-progress-bar" class="progress-bar" style="width:0%"></div>
+            </div>
+            <div class="progress-footer">
+                <span id="decomp-progress-detail" class="progress-detail"></span>
+                <button class="btn-cancel" onclick="cancelDecompJob()">Cancel</button>
+            </div>
+        </section>
+
+        <!-- Results Section -->
+        <section id="decomp-results" class="results-section">
+            <div class="results-header">
+                <span id="decomp-results-count" class="section-label">RESULTS &mdash; 0 DIGS, 0 REQUIREMENTS</span>
+                <div class="results-actions">
+                    <input type="text" id="decomp-results-search" class="search-input"
+                           placeholder="Search DIGs..." oninput="filterDecompResults()">
+                    <button class="btn-export" onclick="downloadDecompXlsx()">&#11015; Download XLSX</button>
+                </div>
+            </div>
+            <div id="decomp-results-list">
+                <!-- Populated by JS -->
+            </div>
+        </section>
+
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- MODEL MODE                                                        -->
+    <!-- ================================================================= -->
+    <div id="model-view" class="view-container hidden">
+
+        <main class="model-layout">
+
+            <!-- Left Sidebar -->
+            <aside class="model-sidebar">
+
+                <!-- Tool mode toggle -->
+                <div class="sidebar-section">
+                    <label class="section-label">MODE</label>
+                    <div id="mode-toggle" class="segment-control">
+                        <button class="segment active" data-mode="capella" onclick="setToolMode('capella')">Capella</button>
+                        <button class="segment" data-mode="rhapsody" onclick="setToolMode('rhapsody')">Rhapsody</button>
+                    </div>
+                </div>
+
+                <!-- Layers -->
+                <div class="sidebar-section">
+                    <label class="section-label">LAYERS</label>
+                    <div id="layer-checkboxes">
+                        <!-- Populated by JS from config -->
+                    </div>
+                </div>
+
+                <!-- Requirements upload -->
+                <div class="sidebar-section">
+                    <label class="section-label">REQUIREMENTS</label>
+                    <div id="model-upload-area" class="upload-area"
+                         onclick="document.getElementById('model-file-input').click()"
+                         ondragover="handleDragOver(event)"
+                         ondragleave="handleDragLeave(event)"
+                         ondrop="handleModelDrop(event)">
+                        <div class="upload-icon">&#128196;</div>
+                        <div class="upload-primary">Drop XLSX or CSV here</div>
+                        <div class="upload-secondary">or click to browse</div>
+                        <input type="file" id="model-file-input" accept=".xlsx,.xls,.csv"
+                               style="display:none" onchange="handleModelFileSelect(this)">
+                    </div>
+                    <div id="model-file-status" class="file-status hidden">
+                        <span id="model-file-name" class="file-name"></span>
+                        <span id="model-req-count" class="req-count"></span>
+                    </div>
+                    <div id="req-counts" class="req-counts"></div>
+                </div>
+
+                <!-- Requirement Preview -->
+                <div id="model-req-preview" class="sidebar-section hidden">
+                    <div class="req-preview-controls">
+                        <button onclick="reqSelectAll()">Select All</button>
+                        <button onclick="reqDeselectAll()">Deselect All</button>
+                        <span id="req-selected-count"></span>
+                    </div>
+                    <div id="req-preview-list" class="req-preview-list"></div>
+                </div>
+
+                <!-- LLM Provider -->
+                <div class="sidebar-section">
+                    <label class="section-label">LLM PROVIDER</label>
+                    <div id="provider-selector" class="segment-control">
+                        <button class="segment" data-provider="api" onclick="setProvider('api')">API</button>
+                        <button class="segment" data-provider="local" onclick="setProvider('local')">Local</button>
+                    </div>
+                </div>
+
+                <!-- Generate Button -->
+                <div class="sidebar-section">
+                    <button id="generate-btn" class="btn-generate" onclick="startModelBatch()" disabled>
+                        &#9654; Add Batch
+                    </button>
+                </div>
+
+            </aside>
+
+            <!-- Main Content -->
+            <section class="model-main">
+
+                <!-- Coverage bar -->
+                <div id="coverage-bar" class="coverage-bar hidden">
+                    <span>Requirement Coverage</span>
+                    <span id="coverage-count">0/0 (0%)</span>
+                    <div class="progress-track">
+                        <div id="coverage-fill" class="progress-fill"></div>
+                    </div>
+                    <span id="uncovered-badge" class="badge">0 uncovered</span>
+                </div>
+
+                <!-- Search bar -->
+                <div class="search-bar">
+                    <input type="text" id="model-search" class="search-input" placeholder="Search elements...">
+                </div>
+
+                <!-- Tab Bar -->
+                <div class="tab-bar">
+                    <div class="tab-buttons">
+                        <button class="tab-btn active" data-tab="tree" onclick="switchTab('tree')">Model Tree</button>
+                        <button class="tab-btn" data-tab="links" onclick="switchTab('links')">Links</button>
+                        <button class="tab-btn" data-tab="instructions" onclick="switchTab('instructions')">Instructions</button>
+                        <button class="tab-btn" data-tab="json" onclick="switchTab('json')">Raw JSON</button>
+                        <button class="tab-btn" data-tab="batches" onclick="switchTab('batches')">Batches</button>
+                    </div>
+                    <div class="tab-actions">
+                        <div class="export-dropdown">
+                            <button class="btn-export" onclick="toggleExportMenu()">
+                                &#8659; Export &#9660;
+                            </button>
+                            <div id="export-menu" class="export-menu hidden">
+                                <div class="export-layer-filters" id="export-layer-filters"></div>
+                                <button onclick="exportProject('json')">Export JSON</button>
+                                <button onclick="exportProject('xlsx')">Export XLSX</button>
+                                <button onclick="exportProject('text')">Export Text</button>
+                                <div class="export-divider"></div>
+                                <button onclick="openPrintView()">Presentation View</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab Content -->
+                <div id="tab-content" class="tab-content">
+                    <div id="tab-tree" class="tab-pane active">
+                        <!-- Collapsible model tree rendered by app.js -->
+                    </div>
+                    <div id="tab-links" class="tab-pane" style="display:none">
+                        <table id="links-table" class="links-table">
+                            <thead>
+                                <tr>
+                                    <th>Source</th>
+                                    <th>Type</th>
+                                    <th>Target</th>
+                                </tr>
+                            </thead>
+                            <tbody id="links-tbody">
+                                <!-- Populated by app.js -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="tab-instructions" class="tab-pane" style="display:none">
+                        <ol id="instructions-list" class="instructions-list">
+                            <!-- Populated by app.js -->
+                        </ol>
+                    </div>
+                    <div id="tab-json" class="tab-pane" style="display:none">
+                        <pre id="json-output" class="json-output"></pre>
+                    </div>
+                    <div id="tab-batches" class="tab-pane" style="display:none">
+                        <div id="batch-list" class="batch-list"></div>
+                    </div>
+                </div>
+
+                <!-- Progress Area -->
+                <div id="model-progress" class="progress-area hidden">
+                    <div class="progress-header">
+                        <span class="progress-title">Generating Model...</span>
+                        <span id="model-running-cost" class="running-cost"></span>
+                    </div>
+                    <div id="pipeline-stages" class="pipeline-stages">
+                        <!-- Stage progress bars rendered by app.js -->
+                    </div>
+                    <div class="progress-footer">
+                        <button class="btn-cancel" onclick="cancelModelJob()">Cancel</button>
+                    </div>
+                </div>
+
+            </section>
+
+        </main>
+
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- AGENT SIDE PANEL                                                  -->
+    <!-- ================================================================= -->
+    <div id="agent-panel" class="agent-panel hidden">
+        <div class="agent-header">
+            <span class="agent-title">&#9670; Agent</span>
+            <div class="agent-header-actions">
+                <button class="btn-chat-clear" onclick="clearChatHistory()" title="Clear chat history">Clear</button>
+                <button class="btn-icon" onclick="toggleAgent()">&#10005; Close</button>
+            </div>
+        </div>
+        <div id="chat-history" class="chat-history">
+            <div class="chat-welcome">
+                <div class="chat-welcome-icon">&#9672;</div>
+                <div class="chat-welcome-title">Shipyard Agent</div>
+                <div class="chat-welcome-text">Ask me about your project. I can modify the model, analyze requirements, add or remove elements, create links, and more.</div>
+            </div>
+        </div>
+        <div id="suggested-prompts" class="suggested-prompts">
+            <span class="label">Try asking:</span>
+            <!-- Populated by JS based on mode -->
+        </div>
+        <div class="chat-input-row">
+            <textarea id="agent-input" class="chat-input" rows="1"
+                   placeholder="Ask about your project..."
+                   onkeydown="if(event.key==='Enter' && !event.shiftKey) { event.preventDefault(); sendAgentMessage(); }"></textarea>
+            <button class="btn-send" onclick="sendAgentMessage()">Send</button>
+        </div>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- SETTINGS MODAL                                                    -->
+    <!-- ================================================================= -->
+    <div id="settings-modal" class="modal hidden">
+        <div class="modal-content modal-settings">
+            <div class="modal-header">
+                <h3>Settings</h3>
+                <button class="btn-icon" onclick="closeSettings()">&#10005;</button>
+            </div>
+            <div class="modal-body">
+
+                <!-- Provider toggle -->
+                <div class="form-group">
+                    <label>Default Provider</label>
+                    <div class="segment-control">
+                        <button class="segment" data-value="api" onclick="setSettingsProvider('api')">API</button>
+                        <button class="segment" data-value="local" onclick="setSettingsProvider('local')">Local</button>
+                    </div>
+                </div>
+
+                <!-- API Keys -->
+                <div class="form-group">
+                    <label>Anthropic API Key</label>
+                    <input type="password" id="settings-anthropic-key" placeholder="sk-ant-...">
+                    <small id="anthropic-key-status" class="key-status"></small>
+                </div>
+
+                <div class="form-group">
+                    <label>OpenRouter API Key</label>
+                    <input type="password" id="settings-openrouter-key" placeholder="sk-or-...">
+                    <small id="openrouter-key-status" class="key-status"></small>
+                </div>
+
+                <div class="form-group">
+                    <label>Local LLM URL</label>
+                    <input type="text" id="settings-local-url" placeholder="http://localhost:11434">
+                </div>
+
+                <!-- Decompose Model -->
+                <div class="form-group">
+                    <label>Decompose Model</label>
+                    <select id="settings-decompose-model" class="model-select">
+                        <!-- Populated by JS from MODEL_CATALOGUE -->
+                    </select>
+                </div>
+
+                <!-- MBSE Model -->
+                <div class="form-group">
+                    <label>MBSE Model</label>
+                    <select id="settings-mbse-model" class="model-select">
+                        <!-- Populated by JS from MODEL_CATALOGUE -->
+                    </select>
+                </div>
+
+                <!-- Auto-Send -->
+                <div class="form-group">
+                    <label>Auto-Send</label>
+                    <div class="toggle-switch-row">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="settings-auto-send" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <span class="toggle-label">Automatically send decomposed requirements to the model pipeline</span>
+                    </div>
+                </div>
+
+                <!-- Default Mode -->
+                <div class="form-group">
+                    <label>Default Tool Mode</label>
+                    <div class="segment-control">
+                        <button class="segment" data-value="capella" onclick="setSettingsMode('capella')">Capella</button>
+                        <button class="segment" data-value="rhapsody" onclick="setSettingsMode('rhapsody')">Rhapsody</button>
+                    </div>
+                </div>
+
+                <!-- Updates -->
+                <div class="form-group" style="border-top: 1px solid var(--border); padding-top: 16px; margin-top: 8px;">
+                    <label>Software Update</label>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <button class="btn-secondary" onclick="checkForUpdates()" id="settings-update-btn">Check for Updates</button>
+                        <small id="settings-update-status"></small>
+                    </div>
+                </div>
+
+                <!-- Cost History -->
+                <div class="form-group" id="cost-history-section">
+                    <label>Cost History</label>
+                    <div id="cost-history-body" class="cost-history-body">
+                        <!-- Populated by app.js on modal open -->
+                    </div>
+                </div>
+
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeSettings()">Cancel</button>
+                <button class="btn-primary" onclick="saveSettings()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- COST CONFIRMATION MODAL                                           -->
+    <!-- ================================================================= -->
+    <div id="cost-modal" class="modal hidden">
+        <div class="modal-content modal-cost">
+            <div class="modal-header">
+                <h3>Confirm</h3>
+                <button class="btn-icon" onclick="closeCostModal()">&#10005;</button>
+            </div>
+            <div class="modal-body">
+                <div class="cost-summary">
+                    <div class="cost-row">
+                        <span class="cost-label">Model</span>
+                        <span id="cost-model-name" class="cost-value"></span>
+                    </div>
+                    <div class="cost-row">
+                        <span class="cost-label">Estimated API calls</span>
+                        <span id="cost-calls" class="cost-value"></span>
+                    </div>
+                    <div class="cost-row">
+                        <span class="cost-label">Estimated cost</span>
+                        <span id="cost-range" class="cost-value cost-highlight"></span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeCostModal()">Cancel</button>
+                <button class="btn-primary btn-green" id="cost-proceed-btn" onclick="proceedAfterCost()">Proceed</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- MODE SWITCH WARNING MODAL                                         -->
+    <!-- ================================================================= -->
+    <div id="mode-switch-modal" class="modal hidden">
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h3>Switch Mode?</h3>
+                <button class="btn-icon" onclick="closeModeSwitchModal()">&#10005;</button>
+            </div>
+            <div class="modal-body">
+                <p>Switching tool mode will clear the current model. This cannot be undone.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeModeSwitchModal()">Cancel</button>
+                <button class="btn-primary btn-danger" onclick="confirmModeSwitch()">Switch</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- DELETE CONFIRMATION MODAL                                         -->
+    <!-- ================================================================= -->
+    <div id="delete-modal" class="modal hidden">
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h3>Delete Project?</h3>
+                <button class="btn-icon" onclick="closeDeleteModal()">&#10005;</button>
+            </div>
+            <div class="modal-body">
+                <p>This will permanently delete <strong id="delete-project-name"></strong>. This cannot be undone.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+                <button class="btn-primary btn-danger" id="delete-confirm-btn" onclick="confirmDelete()">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- CLARIFICATION MODAL                                               -->
+    <!-- ================================================================= -->
+    <div id="clarify-modal" class="modal hidden">
+        <div class="modal-content modal-clarify">
+            <div class="modal-header">
+                <h3>Clarification Needed</h3>
+            </div>
+            <div class="modal-body">
+                <p class="clarify-intro">Some requirements need clarification before generation can proceed:</p>
+                <div id="clarify-items" class="clarify-items">
+                    <!-- Items rendered by app.js -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-primary btn-green" onclick="submitClarifications()">Continue</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Data for JavaScript -->
+    <script>
+        const SHIPYARD_CONFIG = {
+            modelCatalogue: {{ model_catalogue | tojson }},
+            capellaLayers: {{ capella_layers | tojson }},
+            rhapsodyDiagrams: {{ rhapsody_diagrams | tojson }},
+            settings: {{ settings | tojson }},
+            project: {{ project | tojson }},
+        };
+    </script>
+    <script src="/static/app.js"></script>
+
+</body>
+</html>

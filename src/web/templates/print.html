@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ project.project.name or 'Shipyard Model' }} - Presentation View</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: #fff;
+            color: #1a1a1a;
+            line-height: 1.6;
+            padding: 40px;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        h1 {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 6px;
+            color: #111;
+        }
+        .subtitle {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 32px;
+        }
+        h2 {
+            font-size: 20px;
+            font-weight: 600;
+            color: #2a2a6a;
+            margin-top: 36px;
+            margin-bottom: 14px;
+            padding-bottom: 6px;
+            border-bottom: 2px solid #e0e0f0;
+            page-break-after: avoid;
+        }
+        h3 {
+            font-size: 15px;
+            font-weight: 600;
+            color: #444;
+            margin-top: 18px;
+            margin-bottom: 8px;
+            text-transform: capitalize;
+            page-break-after: avoid;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 18px;
+            font-size: 12px;
+        }
+        th {
+            background: #f5f5fa;
+            text-align: left;
+            padding: 8px 10px;
+            border: 1px solid #ddd;
+            font-weight: 600;
+            color: #333;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        td {
+            padding: 6px 10px;
+            border: 1px solid #e8e8e8;
+            vertical-align: top;
+            color: #333;
+        }
+        tr:nth-child(even) td { background: #fafafa; }
+        .element-id {
+            font-family: 'SF Mono', 'Menlo', monospace;
+            font-size: 11px;
+            color: #555;
+            white-space: nowrap;
+        }
+        .section-layer { page-break-before: auto; }
+        .section-layer:first-of-type { page-break-before: avoid; }
+
+        .instructions-list {
+            list-style: none;
+            padding: 0;
+        }
+        .instructions-list li {
+            padding: 6px 0;
+            border-bottom: 1px solid #eee;
+            font-size: 13px;
+        }
+        .step-num {
+            font-family: 'SF Mono', 'Menlo', monospace;
+            font-size: 11px;
+            color: #888;
+            display: inline-block;
+            width: 32px;
+        }
+        .step-action { font-weight: 600; color: #2a2a6a; }
+        .step-detail {
+            color: #555;
+            display: block;
+            padding-left: 32px;
+            font-size: 12px;
+        }
+        .no-data { color: #888; font-style: italic; padding: 12px 0; }
+
+        .print-btn {
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            background: #2a2a6a;
+            color: #fff;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            z-index: 100;
+        }
+        .print-btn:hover { background: #3a3a8a; }
+
+        @media print {
+            body { padding: 20px; }
+            .print-btn { display: none !important; }
+            .section-layer { page-break-before: auto; }
+            h2 { page-break-after: avoid; }
+            table { page-break-inside: auto; }
+            tr { page-break-inside: avoid; }
+        }
+    </style>
+</head>
+<body>
+    <button class="print-btn" onclick="window.print()">Print / Save as PDF</button>
+
+    <h1>{{ project.project.name or 'Shipyard Model' }}</h1>
+    <div class="subtitle">
+        Mode: {{ project.meta.mode | title }} |
+        Generated: {{ project.meta.generated_at[:19] if project.meta.generated_at else 'N/A' }} |
+        Requirements: {{ project.requirements | length }}
+    </div>
+
+    <!-- Requirements -->
+    <h2>Requirements</h2>
+    {% if project.requirements %}
+    <table>
+        <thead>
+            <tr>
+                <th style="width:100px">ID</th>
+                <th>Text</th>
+                <th style="width:100px">Source</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for req in project.requirements %}
+            <tr>
+                <td class="element-id">{{ req.id }}</td>
+                <td>{{ req.text }}</td>
+                <td>{{ req.source_dig }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="no-data">No requirements.</p>
+    {% endif %}
+
+    <!-- Layers -->
+    {% for layer_key, layer_data in project.layers.items() %}
+    <div class="section-layer">
+        <h2>{{ layer_key | replace('_', ' ') | title }}</h2>
+        {% if layer_data and layer_data is mapping %}
+            {% for coll_key, elements in layer_data.items() %}
+                {% if elements and elements is iterable and elements | length > 0 %}
+                <h3>{{ coll_key | replace('_', ' ') }}</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            {% for key in elements[0].keys() %}
+                            <th>{{ key | replace('_', ' ') | title }}</th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for elem in elements %}
+                        <tr>
+                            {% for key in elements[0].keys() %}
+                            <td {% if key == 'id' %}class="element-id"{% endif %}>
+                                {% if elem[key] is iterable and elem[key] is not string and elem[key] is not mapping %}
+                                    {% for item in elem[key] %}
+                                        {% if item is mapping %}
+                                            {{ item.values() | join(', ') }}{% if not loop.last %}<br>{% endif %}
+                                        {% else %}
+                                            {{ item }}{% if not loop.last %}, {% endif %}
+                                        {% endif %}
+                                    {% endfor %}
+                                {% elif elem[key] is mapping %}
+                                    {{ elem[key] }}
+                                {% else %}
+                                    {{ elem[key] or '' }}
+                                {% endif %}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% endif %}
+            {% endfor %}
+        {% else %}
+        <p class="no-data">No data for this layer.</p>
+        {% endif %}
+    </div>
+    {% endfor %}
+
+    <!-- Links -->
+    <h2>Traceability Links</h2>
+    {% if project.links %}
+    <table>
+        <thead>
+            <tr>
+                <th style="width:120px">Source</th>
+                <th style="width:120px">Type</th>
+                <th style="width:120px">Target</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for link in project.links %}
+            <tr>
+                <td class="element-id">{{ link.source }}</td>
+                <td>{{ link.type }}</td>
+                <td class="element-id">{{ link.target }}</td>
+                <td>{{ link.description or '' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="no-data">No links.</p>
+    {% endif %}
+
+    <!-- Instructions -->
+    <h2>Recreation Instructions</h2>
+    {% if project.instructions and project.instructions.steps %}
+    <p style="margin-bottom: 12px; color: #555; font-size: 13px;">
+        Tool: <strong>{{ project.instructions.tool or 'N/A' }}</strong> |
+        {{ project.instructions.steps | length }} steps
+    </p>
+    <ol class="instructions-list">
+        {% for step in project.instructions.steps %}
+        <li>
+            <span class="step-num">{{ step.step or loop.index }}</span>
+            <span class="step-action">{{ step.action or '' }}</span>
+            {% if step.detail %}
+            <span class="step-detail">{{ step.detail }}</span>
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ol>
+    {% elif project.instructions and project.instructions.error %}
+    <p class="no-data">Instructions failed: {{ project.instructions.error }}</p>
+    {% else %}
+    <p class="no-data">No instructions available.</p>
+    {% endif %}
+
+</body>
+</html>
