@@ -74,8 +74,19 @@ body {
     border-radius: 4px;
     cursor: pointer;
     font-size: 12px;
+    position: relative;
 }
 .btn-icon:hover { border-color: #4a4a6a; color: #ccc; }
+.btn-icon.has-update::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 6px;
+    height: 6px;
+    background: var(--accent);
+    border-radius: 50%;
+}
 
 /* ── Mode Tabs (Shipyard-specific) ───────────────────────── */
 

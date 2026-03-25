@@ -395,7 +395,13 @@ def _trace(project: ProjectModel, id: str) -> dict:
 
 def _modify_decomposition(project: ProjectModel, action: str, params: dict) -> dict:
     if action == "re_decompose":
-        return {"success": False, "message": "re_decompose is not yet implemented."}
+        dig_id = params.get("dig_id", "")
+        return {
+            "success": False,
+            "message": f"Re-decomposition of DIG {dig_id} must be triggered from the Decompose UI. "
+                       f"Please switch to Decompose mode and re-run the DIG from there. "
+                       f"The agent cannot trigger async pipeline jobs directly."
+        }
 
     trees = project.decomposition_trees
     dig_id = params.get("dig_id", "")
@@ -637,8 +643,26 @@ def _validate(project: ProjectModel, scope: str = "all") -> dict:
         }
 
     if scope in ("decomposition", "all"):
-        # Placeholder
-        data["decomposition"] = {"status": "not_implemented"}
+        from src.core.models.decompose import RequirementTree
+
+        issues: list[dict] = []
+        for dig_id, tree_data in project.decomposition_trees.items():
+            try:
+                tree = RequirementTree.model_validate(tree_data) if isinstance(tree_data, dict) else tree_data
+            except Exception:
+                issues.append({"dig_id": dig_id, "severity": "error", "message": "Failed to parse decomposition tree", "path": ""})
+                continue
+            if tree.validation and tree.validation.structural_errors:
+                issues.extend([
+                    {"dig_id": dig_id, "severity": e.severity, "message": e.message, "path": e.node_path}
+                    for e in tree.validation.structural_errors
+                ])
+            if tree.validation and tree.validation.semantic_review and tree.validation.semantic_review.issues:
+                issues.extend([
+                    {"dig_id": dig_id, "severity": e.severity, "message": e.message, "path": e.node_path}
+                    for e in tree.validation.semantic_review.issues
+                ])
+        data["decomposition"] = {"issues": issues, "trees_checked": len(project.decomposition_trees)}
 
     return {"success": True, "data": data}
 

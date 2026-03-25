@@ -962,8 +962,32 @@ function readSelectedLayers() {
 function setToolMode(mode) {
     // Check if model exists and warn about data loss
     if (currentModel && currentModel.layers && Object.keys(currentModel.layers).length > 0 && mode !== selectedToolMode) {
-        $('mode-switch-modal')._pendingMode = mode;
-        $('mode-switch-modal').classList.remove('hidden');
+        // Count elements and links for the warning message
+        var elementCount = 0;
+        var layers = currentModel.layers || {};
+        Object.keys(layers).forEach(function (layerKey) {
+            var layer = layers[layerKey];
+            if (layer && typeof layer === 'object') {
+                Object.keys(layer).forEach(function (collKey) {
+                    if (Array.isArray(layer[collKey])) {
+                        elementCount += layer[collKey].length;
+                    }
+                });
+            }
+        });
+        var linkCount = (currentModel.links && currentModel.links.length) || 0;
+
+        // Update the modal text with counts
+        var modal = $('mode-switch-modal');
+        var modalBody = modal.querySelector('.modal-body p');
+        if (modalBody) {
+            var currentModeName = selectedToolMode === 'capella' ? 'Capella' : 'Rhapsody';
+            var newModeName = mode === 'capella' ? 'Capella' : 'Rhapsody';
+            modalBody.textContent = 'Switching to ' + newModeName + ' will clear the existing ' + currentModeName + ' model (' + elementCount + ' elements, ' + linkCount + ' links). Decomposed requirements are preserved. Continue?';
+        }
+
+        modal._pendingMode = mode;
+        modal.classList.remove('hidden');
         return;
     }
     applyToolMode(mode);
@@ -2255,11 +2279,16 @@ function renderSuggestedPrompts(mode) {
         'Show all validation warnings',
         'Which DIGs haven\'t been decomposed?',
         'Send DIG 9694 to modeling',
+        'Why was DIG 9584 only 1 level deep?',
+        'Edit requirement 9584-3 to use GTR allocation',
     ] : [
         'Show traceability from DIG 9584 to physical components',
         'Which requirements don\'t have traceability links yet?',
         'Add a logical component for ice detection sensors',
         'What\'s the coverage for the propulsion requirements?',
+        'Re-decompose requirement 9584-3 with more detail',
+        'Regenerate the Operational Analysis layer',
+        'Compare the decomposition of DIG 9584 vs DIG 9646',
     ];
 
     prompts.forEach(function (p) {
@@ -2493,6 +2522,10 @@ async function checkForUpdates() {
             // Also update settings modal if open
             var settingsStatus = $('settings-update-status');
             if (settingsStatus) settingsStatus.textContent = data.behind + ' update(s) available';
+
+            // Add update dot to settings gear icon
+            var settingsBtn = document.querySelector('[onclick="openSettings()"]');
+            if (settingsBtn) settingsBtn.classList.add('has-update');
         }
     } catch (e) {
         // Silently ignore

@@ -386,29 +386,38 @@ async def toggle_auto_send(request: Request):
 
 @app.get("/settings/cost-history")
 async def cost_history():
-    """Read cost_log.jsonl if it exists."""
-    log_path = config.OUTPUT_DIR / "cost_log.jsonl"
-    if not log_path.exists():
-        return {"runs": [], "total_spend": 0.0, "avg_per_run": 0.0, "total_runs": 0}
+    """Return cost breakdown grouped by pipeline (decompose vs model)."""
+    project = current_project
+    zeros = {
+        "decompose": {"total_cost": 0.0, "api_calls": 0},
+        "model": {"total_cost": 0.0, "api_calls": 0},
+        "total": {"total_cost": 0.0, "api_calls": 0},
+    }
+    if project is None or not project.batches:
+        return zeros
 
-    runs = []
-    for line in log_path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            runs.append(json.loads(line))
-        except json.JSONDecodeError:
-            continue
+    breakdown: dict = {
+        "decompose": {"total_cost": 0.0, "api_calls": 0},
+        "model": {"total_cost": 0.0, "api_calls": 0},
+    }
 
-    total_spend = sum(r.get("totals", {}).get("cost_usd", 0.0) for r in runs)
-    avg_per_run = (total_spend / len(runs)) if runs else 0.0
+    for batch in project.batches:
+        bt = batch.batch_type if batch.batch_type in ("decompose", "model") else "model"
+        breakdown[bt]["total_cost"] += batch.cost
+        breakdown[bt]["api_calls"] += 1
+
+    decompose_cost = round(breakdown["decompose"]["total_cost"], 6)
+    model_cost = round(breakdown["model"]["total_cost"], 6)
+    decompose_calls = breakdown["decompose"]["api_calls"]
+    model_calls = breakdown["model"]["api_calls"]
 
     return {
-        "runs": runs,
-        "total_runs": len(runs),
-        "total_spend": round(total_spend, 6),
-        "avg_per_run": round(avg_per_run, 6),
+        "decompose": {"total_cost": decompose_cost, "api_calls": decompose_calls},
+        "model": {"total_cost": model_cost, "api_calls": model_calls},
+        "total": {
+            "total_cost": round(decompose_cost + model_cost, 6),
+            "api_calls": decompose_calls + model_calls,
+        },
     }
 
 
