@@ -687,7 +687,8 @@ async def decompose_run(request: Request):
     project = _require_project()
     body = await request.json()
     dig_ids = body.get("dig_ids", [])
-    settings = body.get("settings", {})
+    # Frontend sends settings at top level, not nested under "settings"
+    settings = body.get("settings", None) or body
 
     if not project.reference_data:
         raise HTTPException(400, "No reference data loaded. Upload a workbook first.")
@@ -772,30 +773,34 @@ async def decompose_run(request: Request):
 
                 dig_text = dig_info["dig_text"]
                 job.emit({"type": "dig_started", "dig_id": dig_id, "dig_text": dig_text, "index": idx, "total": total_digs})
-                job.emit({"type": "phase", "dig_id": dig_id, "phase": "decompose"})
+                job.emit({"type": "phase", "dig_id": dig_id, "phase": "decompose", "detail": f"Building requirement tree (depth {max_depth})"})
                 tree = await asyncio.get_event_loop().run_in_executor(
                     None, lambda: decompose_dig(dig_id, dig_text, ref_data, max_depth, max_breadth, skip_vv, tracker, model=decompose_model)
                 )
+                job.emit({"type": "cost", "total_cost": tracker.get_summary().total_cost_usd})
 
                 if not skip_vv:
-                    job.emit({"type": "phase", "dig_id": dig_id, "phase": "vv"})
+                    job.emit({"type": "phase", "dig_id": dig_id, "phase": "vv", "detail": "Generating verification & validation criteria"})
                     await asyncio.get_event_loop().run_in_executor(
                         None, lambda: apply_vv_to_tree(tree, ref_data, tracker, model=decompose_model)
                     )
+                    job.emit({"type": "cost", "total_cost": tracker.get_summary().total_cost_usd})
 
-                job.emit({"type": "phase", "dig_id": dig_id, "phase": "validate"})
+                job.emit({"type": "phase", "dig_id": dig_id, "phase": "validate", "detail": "Checking tree structure"})
                 issues = validate_tree_structure(tree, ref_data, max_depth, max_breadth)
 
                 if not skip_judge:
-                    job.emit({"type": "phase", "dig_id": dig_id, "phase": "judge"})
+                    job.emit({"type": "phase", "dig_id": dig_id, "phase": "judge", "detail": "Semantic quality review"})
                     review = await asyncio.get_event_loop().run_in_executor(
                         None, lambda: run_semantic_judge(tree, tracker, model=decompose_model)
                     )
+                    job.emit({"type": "cost", "total_cost": tracker.get_summary().total_cost_usd})
                     if review.issues:
-                        job.emit({"type": "phase", "dig_id": dig_id, "phase": "refine"})
+                        job.emit({"type": "phase", "dig_id": dig_id, "phase": "refine", "detail": f"Addressing {len(review.issues)} issue(s)"})
                         tree = await asyncio.get_event_loop().run_in_executor(
                             None, lambda: refine_tree(tree, review, ref_data, tracker, model=decompose_model)
                         )
+                        job.emit({"type": "cost", "total_cost": tracker.get_summary().total_cost_usd})
 
                 num_nodes = tree.count_nodes()
                 total_nodes += num_nodes

@@ -929,8 +929,28 @@ async function sendToModel(digIds) {
     }
 }
 
-function downloadDecompXlsx() {
-    window.location.href = '/decompose/export';
+async function downloadDecompXlsx() {
+    try {
+        var res = await fetch('/export/decomposition');
+        if (!res.ok) {
+            var err = await res.json().catch(function () { return {}; });
+            showError(err.detail || 'Export failed');
+            return;
+        }
+        var blob = await res.blob();
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        var cd = res.headers.get('content-disposition') || '';
+        var match = cd.match(/filename="?([^"]+)"?/);
+        a.download = match ? match[1] : 'decomposition.xlsx';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+    } catch (e) {
+        showError('Export failed: ' + e.message);
+    }
 }
 
 // =============================================================================
@@ -2022,6 +2042,14 @@ function handleStreamEvent(event, type) {
     }
 }
 
+var _decompPhaseNames = {
+    'decompose': 'Decomposing',
+    'vv': 'V&V Criteria',
+    'validate': 'Validating',
+    'judge': 'Quality Review',
+    'refine': 'Refining'
+};
+
 function handleDecompStreamEvent(event) {
     var label = $('decomp-progress-label');
     var detail = $('decomp-progress-detail');
@@ -2033,18 +2061,25 @@ function handleDecompStreamEvent(event) {
             if (label) label.textContent = 'Processing ' + (event.total_digs || 0) + ' DIG(s)...';
             break;
         case 'dig_started':
-            if (label) label.textContent = 'DIG ' + event.dig_id + ' [' + event.index + '/' + event.total + ']';
+            if (label) label.textContent = 'DIG ' + event.dig_id + '  [' + event.index + '/' + event.total + ']';
             if (detail) detail.textContent = event.dig_text || '';
             if (bar) bar.style.width = ((event.index - 1) / event.total * 100) + '%';
             break;
         case 'phase':
-            if (detail) detail.textContent = (event.phase || '') + ' \u2014 ' + (event.detail || '');
+            var phaseName = _decompPhaseNames[event.phase] || event.phase;
+            if (detail) detail.textContent = phaseName + (event.detail ? ' \u2014 ' + event.detail : '');
             break;
         case 'cost':
             if (cost) cost.textContent = formatCost(event.total_cost || 0);
             break;
         case 'dig_complete':
-            if (detail) detail.textContent = 'DIG ' + event.dig_id + ': ' + (event.nodes || 0) + ' nodes, ' + (event.levels || 0) + ' levels';
+            if (detail) detail.textContent = 'DIG ' + event.dig_id + ' complete \u2014 ' + (event.nodes || 0) + ' requirements generated';
+            if (bar) {
+                // Advance bar based on completed DIGs
+                var total = parseInt(label.textContent.match(/\d+\/(\d+)/)?.[1] || '1');
+                var idx = parseInt(label.textContent.match(/\[(\d+)\//)?.[1] || '1');
+                bar.style.width = (idx / total * 100) + '%';
+            }
             break;
         case 'complete':
             if (label) label.textContent = 'Complete \u2014 ' + (event.total_digs || 0) + ' DIGs, ' + (event.total_nodes || 0) + ' requirements';
@@ -2578,22 +2613,24 @@ async function checkForUpdates() {
         if (!res.ok) return;
         var data = await res.json();
 
+        var settingsStatus = $('settings-update-status');
         if (data.available) {
             var banner = $('update-banner');
             var versionEl = $('update-version');
             if (banner) banner.classList.remove('hidden');
             if (versionEl) versionEl.textContent = data.version || ('v' + data.behind + ' update(s)');
 
-            // Also update settings modal if open
-            var settingsStatus = $('settings-update-status');
             if (settingsStatus) settingsStatus.textContent = data.behind + ' update(s) available';
 
             // Add update dot to settings gear icon
             var settingsBtn = document.querySelector('[onclick="openSettings()"]');
             if (settingsBtn) settingsBtn.classList.add('has-update');
+        } else {
+            if (settingsStatus) settingsStatus.textContent = 'Up to date';
         }
     } catch (e) {
-        // Silently ignore
+        var settingsStatus = $('settings-update-status');
+        if (settingsStatus) settingsStatus.textContent = 'Check failed';
     }
 }
 
