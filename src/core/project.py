@@ -66,7 +66,7 @@ def save_project(project: ProjectModel, projects_dir: Path | None = None) -> Pat
     project_dir = projects_dir / slug
     project_dir.mkdir(parents=True, exist_ok=True)
     path = project_dir / "project.json"
-    data = json.loads(project.model_dump_json())
+    data = project.model_dump(mode="python")
     path.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
     return path
 
@@ -150,7 +150,7 @@ _redo_stacks: dict[str, list[dict]] = {}
 
 
 def _snapshot(project: ProjectModel) -> dict:
-    return json.loads(project.model_dump_json())
+    return project.model_dump(mode="python")
 
 
 def push_undo(project: ProjectModel) -> None:
