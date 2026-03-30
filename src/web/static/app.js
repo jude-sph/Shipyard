@@ -1222,7 +1222,7 @@ async function startModelBatch() {
     if (checkedBoxes.length > 0) {
         var selectedIds = [];
         checkedBoxes.forEach(function (cb) { selectedIds.push(cb.value); });
-        settings.selected_requirements = selectedIds;
+        settings.req_ids = selectedIds;
     }
 
     // Estimate cost first
@@ -1260,7 +1260,7 @@ function gatherModelSettings() {
 
     return {
         mode: selectedToolMode,
-        selected_layers: selectedLayers.slice(),
+        layers: selectedLayers.slice(),
         model: settings.mbse_model || settings.model || 'claude-sonnet-4-6',
         provider: provider,
     };
