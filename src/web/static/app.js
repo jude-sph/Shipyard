@@ -2518,6 +2518,10 @@ async function saveSettings() {
             cfg.settings = Object.assign(cfg.settings || {}, body);
             if (body.anthropic_key) cfg.settings.has_anthropic_key = true;
             if (body.openrouter_key) cfg.settings.has_openrouter_key = true;
+            var statusEl = $('auto-send-status');
+            if (statusEl && body.auto_send !== undefined) {
+                statusEl.textContent = body.auto_send ? 'ON' : 'OFF';
+            }
             closeSettings();
             showToast('Settings saved', 'success');
         } else {
@@ -2547,6 +2551,8 @@ async function toggleAutoSend() {
             body: JSON.stringify({ auto_send: newValue }),
         });
         if (statusEl) statusEl.textContent = newValue ? 'ON' : 'OFF';
+        var settingsCb = $('settings-auto-send');
+        if (settingsCb) settingsCb.checked = newValue;
         var cfg = window.SHIPYARD_CONFIG || {};
         if (cfg.settings) cfg.settings.auto_send = newValue;
         showToast('Auto-send ' + (newValue ? 'enabled' : 'disabled'), 'info');
