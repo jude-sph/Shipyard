@@ -746,7 +746,8 @@ async def decompose_run(request: Request):
 
         try:
             job.status = "running"
-            job.emit({"type": "started", "job_id": job_id, "dig_ids": dig_ids})
+            total_digs = len(dig_ids)
+            job.emit({"type": "started", "job_id": job_id, "dig_ids": dig_ids, "total_digs": total_digs})
 
             ref_data = WorkbookData(**project.reference_data)
             max_depth = settings.get("max_depth", project.decomposition_settings.max_depth)
@@ -755,8 +756,9 @@ async def decompose_run(request: Request):
             skip_judge = settings.get("skip_judge", project.decomposition_settings.skip_judge)
             decompose_model = config.DECOMPOSE_MODEL
             tracker = CostTracker(model=decompose_model)
+            total_nodes = 0
 
-            for dig_id in dig_ids:
+            for idx, dig_id in enumerate(dig_ids, 1):
                 if job.cancelled:
                     job.emit({"type": "cancelled"})
                     job.status = "cancelled"
@@ -769,6 +771,7 @@ async def decompose_run(request: Request):
                     continue
 
                 dig_text = dig_info["dig_text"]
+                job.emit({"type": "dig_started", "dig_id": dig_id, "dig_text": dig_text, "index": idx, "total": total_digs})
                 job.emit({"type": "phase", "dig_id": dig_id, "phase": "decompose"})
                 tree = await asyncio.get_event_loop().run_in_executor(
                     None, lambda: decompose_dig(dig_id, dig_text, ref_data, max_depth, max_breadth, skip_vv, tracker, model=decompose_model)
@@ -794,8 +797,10 @@ async def decompose_run(request: Request):
                             None, lambda: refine_tree(tree, review, ref_data, tracker, model=decompose_model)
                         )
 
+                num_nodes = tree.count_nodes()
+                total_nodes += num_nodes
                 project.decomposition_trees[dig_id] = json.loads(tree.model_dump_json())
-                job.emit({"type": "dig_complete", "dig_id": dig_id, "num_nodes": tree.count_nodes()})
+                job.emit({"type": "dig_complete", "dig_id": dig_id, "nodes": num_nodes})
 
             _sync_modeling_queue(project)
 
@@ -807,7 +812,7 @@ async def decompose_run(request: Request):
             save_project(project)
 
             job.status = "complete"
-            job.emit({"type": "complete"})
+            job.emit({"type": "complete", "total_digs": total_digs, "total_nodes": total_nodes})
         except Exception as exc:
             job.status = "failed"
             job.emit({"type": "error", "message": str(exc)})

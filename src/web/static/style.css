@@ -371,6 +371,12 @@ body {
     margin-top: 8px;
 }
 
+.file-list {
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
 /* Controls */
 .decomp-controls { min-width: 200px; display: flex; flex-direction: column; gap: 8px; }
 .controls { min-width: 200px; display: flex; flex-direction: column; gap: 8px; }
@@ -403,7 +409,7 @@ body {
     display: flex;
     gap: 8px;
     margin-top: 14px;
-    align-items: center;
+    align-items: flex-end;
 }
 
 /* DIG picker (from reqdecomp) */

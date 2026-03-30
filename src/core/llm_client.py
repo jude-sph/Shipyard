@@ -163,6 +163,7 @@ def call_llm(
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
                 actual_cost=actual_cost,
+                level=level,
             )
 
             json_text = _extract_json(text)

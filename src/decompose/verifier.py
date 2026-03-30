@@ -27,7 +27,7 @@ def apply_vv_to_tree(tree: RequirementTree, ref_data: WorkbookData, cost_tracker
         logger.info(f'  Generating V&V for L{node.level}: "{node.technical_requirement[:50]}..."')
         prompt = format_vv_prompt(level=node.level, level_name=node.level_name, technical_requirement=node.technical_requirement, system_hierarchy_id=node.system_hierarchy_id, acceptance_phases=refs["acceptance_phases"], verification_methods=refs["verification_methods"], verification_events=refs["verification_events"])
         try:
-            result = call_llm(prompt, cost_tracker, "vv", node.level, client=client, model=model)
+            result = call_llm(prompt, cost_tracker, "vv", stage=f"level_{node.level}", client=client, model=model, level=node.level)
             node.acceptance_criteria = result.get("acceptance_criteria")
             node.verification_method = result.get("verification_method", [])
             node.verification_event = result.get("verification_event", [])
