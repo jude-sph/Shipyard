@@ -29,27 +29,27 @@ def _build_parent_chain(ancestors: list[RequirementNode]) -> str:
     return "\n\n".join(lines)
 
 
-def decompose_dig(dig_id: str, dig_text: str, ref_data: WorkbookData, max_depth: int, max_breadth: int, skip_vv: bool, cost_tracker: CostTracker) -> RequirementTree:
+def decompose_dig(dig_id: str, dig_text: str, ref_data: WorkbookData, max_depth: int, max_breadth: int, skip_vv: bool, cost_tracker: CostTracker, model: str | None = None) -> RequirementTree:
     logger.info(f'Decomposing DIG {dig_id}: "{dig_text[:80]}..."')
-    client = create_client()
+    client = create_client(model=model)
     refs = _format_ref_data(ref_data)
     tree = RequirementTree(dig_id=dig_id, dig_text=dig_text)
-    root_children = _decompose_level(client=client, dig_id=dig_id, dig_text=dig_text, target_level=1, ancestors=[], refs=refs, max_breadth=max_breadth, cost_tracker=cost_tracker)
+    root_children = _decompose_level(client=client, dig_id=dig_id, dig_text=dig_text, target_level=1, ancestors=[], refs=refs, max_breadth=max_breadth, cost_tracker=cost_tracker, model=model)
     if not root_children:
         logger.warning(f"DIG {dig_id}: No Level 1 requirements generated")
         return tree
     root = root_children[0]
     tree.root = root
     if max_depth > 1:
-        _decompose_children(client=client, dig_id=dig_id, dig_text=dig_text, parent=root, ancestors=[root], refs=refs, max_depth=max_depth, max_breadth=max_breadth, cost_tracker=cost_tracker)
+        _decompose_children(client=client, dig_id=dig_id, dig_text=dig_text, parent=root, ancestors=[root], refs=refs, max_depth=max_depth, max_breadth=max_breadth, cost_tracker=cost_tracker, model=model)
     return tree
 
 
-def _decompose_level(client, dig_id, dig_text, target_level, ancestors, refs, max_breadth, cost_tracker):
+def _decompose_level(client, dig_id, dig_text, target_level, ancestors, refs, max_breadth, cost_tracker, model=None):
     target_name = LEVEL_NAMES.get(target_level, f"Level {target_level}")
     parent_name = LEVEL_NAMES.get(target_level - 1, "DIG") if target_level > 1 else "DIG"
     prompt = format_decompose_prompt(dig_id=dig_id, dig_text=dig_text, target_level=target_level, target_level_name=target_name, parent_scope=parent_name, child_scope=target_name, parent_chain=_build_parent_chain(ancestors), system_hierarchy=refs["system_hierarchy"], chapter_list=refs["all_chapters"], max_breadth=max_breadth)
-    result = call_llm(prompt, cost_tracker, "decompose", target_level, client=client)
+    result = call_llm(prompt, cost_tracker, "decompose", target_level, client=client, model=model)
     if result.get("decomposition_complete", False):
         logger.info(f"  L{target_level}: Decomposition complete (no further breakdown)")
         return []
@@ -64,13 +64,13 @@ def _decompose_level(client, dig_id, dig_text, target_level, ancestors, refs, ma
     return children
 
 
-def _decompose_children(client, dig_id, dig_text, parent, ancestors, refs, max_depth, max_breadth, cost_tracker):
+def _decompose_children(client, dig_id, dig_text, parent, ancestors, refs, max_depth, max_breadth, cost_tracker, model=None):
     if parent.level >= max_depth:
         return
     if parent.decomposition_complete:
         return
-    children = _decompose_level(client=client, dig_id=dig_id, dig_text=dig_text, target_level=parent.level + 1, ancestors=ancestors, refs=refs, max_breadth=max_breadth, cost_tracker=cost_tracker)
+    children = _decompose_level(client=client, dig_id=dig_id, dig_text=dig_text, target_level=parent.level + 1, ancestors=ancestors, refs=refs, max_breadth=max_breadth, cost_tracker=cost_tracker, model=model)
     parent.children = children
     for child in children:
         if not child.decomposition_complete and child.level < max_depth:
-            _decompose_children(client=client, dig_id=dig_id, dig_text=dig_text, parent=child, ancestors=ancestors + [child], refs=refs, max_depth=max_depth, max_breadth=max_breadth, cost_tracker=cost_tracker)
+            _decompose_children(client=client, dig_id=dig_id, dig_text=dig_text, parent=child, ancestors=ancestors + [child], refs=refs, max_depth=max_depth, max_breadth=max_breadth, cost_tracker=cost_tracker, model=model)

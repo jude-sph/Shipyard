@@ -5,14 +5,7 @@ import re
 import time
 from typing import Any
 
-from src.core.config import (
-    ANTHROPIC_API_KEY,
-    LOCAL_LLM_URL,
-    MODEL,
-    MODEL_PRICING,
-    OPENROUTER_API_KEY,
-    PROVIDER,
-)
+from src.core import config
 
 logger = logging.getLogger(__name__)
 
@@ -20,39 +13,52 @@ MAX_RETRIES = 3
 RETRY_DELAYS = [2, 5, 10]
 
 
-def _create_client():
-    """Create the appropriate API client based on PROVIDER config."""
-    if PROVIDER == "openrouter":
-        if not OPENROUTER_API_KEY:
+def _provider_for_model(model_id: str) -> str:
+    """Infer the correct provider for a model ID from the catalogue."""
+    for entry in config.MODEL_CATALOGUE:
+        if entry["id"] == model_id:
+            return entry["provider"]
+    # Fallback heuristics: IDs with '/' are typically openrouter
+    if "/" in model_id:
+        return "openrouter"
+    return "anthropic"
+
+
+def _create_client(provider: str | None = None):
+    """Create the appropriate API client based on provider."""
+    if provider is None:
+        provider = config.PROVIDER
+    if provider == "openrouter":
+        if not config.OPENROUTER_API_KEY:
             raise RuntimeError(
                 "OpenRouter API key not set. Set OPENROUTER_API_KEY in your .env"
             )
         import openai
         return openai.OpenAI(
-            api_key=OPENROUTER_API_KEY,
+            api_key=config.OPENROUTER_API_KEY,
             base_url="https://openrouter.ai/api/v1",
             timeout=120.0,
         )
-    elif PROVIDER == "local":
+    elif provider == "local":
         import openai
         return openai.OpenAI(
             api_key="not-needed",
-            base_url=LOCAL_LLM_URL,
+            base_url=config.LOCAL_LLM_URL,
             timeout=120.0,
         )
     else:
         # Default: anthropic
-        if not ANTHROPIC_API_KEY:
+        if not config.ANTHROPIC_API_KEY:
             raise RuntimeError(
                 "Anthropic API key not set. Set ANTHROPIC_API_KEY in your .env"
             )
         import anthropic
-        return anthropic.Anthropic(api_key=ANTHROPIC_API_KEY, timeout=120.0)
+        return anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY, timeout=120.0)
 
 
-def _get_retry_exceptions():
-    """Get the retryable exception types for the current provider."""
-    if PROVIDER in ("openrouter", "local"):
+def _get_retry_exceptions(provider: str):
+    """Get the retryable exception types for the given provider."""
+    if provider in ("openrouter", "local"):
         import openai
         return (openai.APIError, openai.APIConnectionError, openai.RateLimitError, TimeoutError)
     else:
@@ -60,11 +66,11 @@ def _get_retry_exceptions():
         return (anthropic.APIError, anthropic.APIConnectionError, anthropic.RateLimitError, TimeoutError)
 
 
-def _make_request(client, prompt: str, max_tokens: int = 4096) -> tuple[str, int, int, float | None]:
+def _make_request(client, model: str, provider: str, prompt: str, max_tokens: int = 4096) -> tuple[str, int, int, float | None]:
     """Make an API request and return (text, input_tokens, output_tokens, actual_cost_or_none)."""
-    if PROVIDER in ("openrouter", "local"):
+    if provider in ("openrouter", "local"):
         resp = client.chat.completions.create(
-            model=MODEL,
+            model=model,
             max_tokens=max_tokens,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -83,7 +89,7 @@ def _make_request(client, prompt: str, max_tokens: int = 4096) -> tuple[str, int
                 pass
     else:
         resp = client.messages.create(
-            model=MODEL,
+            model=model,
             max_tokens=max_tokens,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -117,6 +123,7 @@ def call_llm(
     max_tokens: int = 4096,
     client=None,
     level: int = 0,
+    model: str | None = None,
 ) -> dict:
     """Make an LLM API call with retry logic. Returns parsed JSON dict.
 
@@ -128,19 +135,23 @@ def call_llm(
         max_tokens: Maximum tokens in response
         client: Optional pre-created client (reuse across calls for efficiency)
         level: Decomposition level for cost tracking (used by reqdecomp pipeline)
+        model: Model ID to use (defaults to config.MODEL)
     """
-    if client is None:
-        client = _create_client()
+    model = model or config.MODEL
+    provider = _provider_for_model(model)
 
-    retry_exceptions = _get_retry_exceptions()
+    if client is None:
+        client = _create_client(provider)
+
+    retry_exceptions = _get_retry_exceptions(provider)
     text = ""
 
     for attempt in range(MAX_RETRIES):
         try:
-            logger.debug(f"API call: {call_type} [{stage}] (attempt {attempt + 1})")
+            logger.debug(f"API call: {call_type} [{stage}] model={model} provider={provider} (attempt {attempt + 1})")
             logger.debug(f"Prompt length: {len(prompt)} chars")
 
-            text, input_tokens, output_tokens, actual_cost = _make_request(client, prompt, max_tokens)
+            text, input_tokens, output_tokens, actual_cost = _make_request(client, model, provider, prompt, max_tokens)
 
             if not text:
                 raise ValueError("LLM returned empty response")
@@ -188,6 +199,7 @@ def call_llm_with_tools(
     stage: str = "",
     max_tokens: int = 4096,
     client=None,
+    model: str | None = None,
 ):
     """Make an LLM API call with tool/function calling support. Returns raw response.
 
@@ -202,12 +214,31 @@ def call_llm_with_tools(
         stage: Pipeline stage name for cost tracking (defaults to "")
         max_tokens: Maximum tokens in response
         client: Optional pre-created client
+        model: Model ID to use (defaults to config.MODEL)
     """
+    model = model or config.MODEL
+    provider = _provider_for_model(model)
+
+    if provider == "anthropic":
+        # Anthropic SDK doesn't support OpenAI-style tool calling;
+        # route through OpenRouter if an OpenRouter key is available
+        if config.OPENROUTER_API_KEY:
+            provider = "openrouter"
+            # Map direct Anthropic model IDs to OpenRouter format
+            if "/" not in model:
+                model = f"anthropic/{model}"
+        else:
+            raise RuntimeError(
+                f"Chat agent requires an OpenAI-compatible API. Model '{model}' uses the "
+                "Anthropic provider which doesn't support tool calling in this format. "
+                "Set an OPENROUTER_API_KEY or select an OpenRouter model."
+            )
+
     if client is None:
-        client = _create_client()
+        client = _create_client(provider)
 
     resp = client.chat.completions.create(
-        model=MODEL,
+        model=model,
         max_tokens=max_tokens,
         messages=messages,
         tools=tools,
@@ -230,6 +261,11 @@ def call_llm_with_tools(
     return resp
 
 
-def create_client():
-    """Public factory for creating a reusable client."""
+def create_client(model: str | None = None):
+    """Public factory for creating a reusable client.
+
+    If model is provided, the client is created for the correct provider.
+    """
+    if model:
+        return _create_client(_provider_for_model(model))
     return _create_client()

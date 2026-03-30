@@ -23,7 +23,7 @@ PROMPT_MAP = {
 }
 
 
-def generate_layer(mode: str, layer_key: str, requirements: list[Requirement], tracker: CostTracker, client=None, existing_elements=None) -> dict:
+def generate_layer(mode: str, layer_key: str, requirements: list[Requirement], tracker: CostTracker, client=None, existing_elements=None, model: str | None = None) -> dict:
     """Stage 3: Generate model elements for a single layer/diagram type."""
     prompt_file = PROMPT_MAP.get((mode, layer_key))
     if not prompt_file:
@@ -37,7 +37,7 @@ def generate_layer(mode: str, layer_key: str, requirements: list[Requirement], t
 
     prompt = template.format(requirements=reqs_json, existing_elements=existing_ctx)
     return call_llm(prompt=prompt, cost_tracker=tracker, call_type="generate",
-                    stage=f"generate_{layer_key}", client=client)
+                    stage=f"generate_{layer_key}", client=client, model=model)
 
 
 def _format_existing_elements(layer_data: dict) -> str:

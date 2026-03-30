@@ -75,6 +75,16 @@ current_project_name: str | None = None
 jobs: dict[str, Job] = {}
 _active_job_id: str | None = None
 
+# Auto-load if there's a saved project
+_projects = list_projects()
+if _projects:
+    # Load the most recently modified project
+    _projects.sort(key=lambda p: p.get("modified", ""), reverse=True)
+    _slug = Path(_projects[0]["path"]).parent.name
+    current_project = load_project(_slug)
+    if current_project:
+        current_project_name = current_project.project.name
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -335,14 +345,27 @@ async def get_settings():
 async def update_settings(request: Request):
     """Update API keys, provider — write to .env file."""
     body = await request.json()
-    env_path = config.PACKAGE_ROOT / ".env"
+    # Write to CWD .env (takes precedence), fall back to package root
+    env_path = config.CWD / ".env" if (config.CWD / ".env").exists() else config.PACKAGE_ROOT / ".env"
+
+    # Auto-detect provider from the selected models via catalogue
+    def _provider_for(model_id):
+        for m in MODEL_CATALOGUE:
+            if m["id"] == model_id:
+                return m["provider"]
+        return "openrouter" if "/" in model_id else "anthropic"
+
+    decompose_model = body.get('decompose_model', config.DECOMPOSE_MODEL)
+    mbse_model = body.get('mbse_model', config.MBSE_MODEL)
+    provider = body.get('provider', _provider_for(mbse_model))
+
     lines = [
         "# Shipyard Configuration",
-        f"PROVIDER={body.get('provider', config.PROVIDER)}",
-        f"MODEL={body.get('model', config.MODEL)}",
+        f"PROVIDER={provider}",
+        f"MODEL={body.get('model', mbse_model)}",
         f"DEFAULT_MODE={body.get('default_mode', config.DEFAULT_MODE)}",
-        f"DECOMPOSE_MODEL={body.get('decompose_model', config.DECOMPOSE_MODEL)}",
-        f"MBSE_MODEL={body.get('mbse_model', config.MBSE_MODEL)}",
+        f"DECOMPOSE_MODEL={decompose_model}",
+        f"MBSE_MODEL={mbse_model}",
         "",
     ]
     ak = body.get("anthropic_key", "").strip() or config.ANTHROPIC_API_KEY
@@ -354,6 +377,15 @@ async def update_settings(request: Request):
     lines.append("")
     env_path.write_text("\n".join(lines), encoding="utf-8")
     _reload_config()
+
+    # Sync per-project model settings with global settings
+    if current_project:
+        if body.get('mbse_model'):
+            current_project.model_settings.model = mbse_model
+        if body.get('decompose_model'):
+            current_project.decomposition_settings.model = decompose_model
+        save_project(current_project)
+
     return {
         "status": "ok",
         "provider": config.PROVIDER,
@@ -657,9 +689,13 @@ async def decompose_run(request: Request):
     dig_ids = body.get("dig_ids", [])
     settings = body.get("settings", {})
 
-    if not dig_ids:
-        raise HTTPException(400, "No DIG IDs provided")
     if not project.reference_data:
+        raise HTTPException(400, "No reference data loaded. Upload a workbook first.")
+
+    # Empty dig_ids means "all DIGs"
+    if not dig_ids:
+        dig_ids = list(project.reference_data.get("digs", {}).keys())
+    if not dig_ids:
         raise HTTPException(400, "No reference data loaded. Upload a workbook first.")
 
     # Concurrent operation guard (Section 9.5)
@@ -717,7 +753,8 @@ async def decompose_run(request: Request):
             max_breadth = settings.get("max_breadth", project.decomposition_settings.max_breadth)
             skip_vv = settings.get("skip_vv", project.decomposition_settings.skip_vv)
             skip_judge = settings.get("skip_judge", project.decomposition_settings.skip_judge)
-            tracker = CostTracker(model=project.decomposition_settings.model)
+            decompose_model = config.DECOMPOSE_MODEL
+            tracker = CostTracker(model=decompose_model)
 
             for dig_id in dig_ids:
                 if job.cancelled:
@@ -733,15 +770,14 @@ async def decompose_run(request: Request):
 
                 dig_text = dig_info["dig_text"]
                 job.emit({"type": "phase", "dig_id": dig_id, "phase": "decompose"})
-
                 tree = await asyncio.get_event_loop().run_in_executor(
-                    None, lambda: decompose_dig(dig_id, dig_text, ref_data, max_depth, max_breadth, skip_vv, tracker)
+                    None, lambda: decompose_dig(dig_id, dig_text, ref_data, max_depth, max_breadth, skip_vv, tracker, model=decompose_model)
                 )
 
                 if not skip_vv:
                     job.emit({"type": "phase", "dig_id": dig_id, "phase": "vv"})
                     await asyncio.get_event_loop().run_in_executor(
-                        None, lambda: apply_vv_to_tree(tree, ref_data, tracker)
+                        None, lambda: apply_vv_to_tree(tree, ref_data, tracker, model=decompose_model)
                     )
 
                 job.emit({"type": "phase", "dig_id": dig_id, "phase": "validate"})
@@ -750,12 +786,12 @@ async def decompose_run(request: Request):
                 if not skip_judge:
                     job.emit({"type": "phase", "dig_id": dig_id, "phase": "judge"})
                     review = await asyncio.get_event_loop().run_in_executor(
-                        None, lambda: run_semantic_judge(tree, tracker)
+                        None, lambda: run_semantic_judge(tree, tracker, model=decompose_model)
                     )
                     if review.issues:
                         job.emit({"type": "phase", "dig_id": dig_id, "phase": "refine"})
                         tree = await asyncio.get_event_loop().run_in_executor(
-                            None, lambda: refine_tree(tree, review, ref_data, tracker)
+                            None, lambda: refine_tree(tree, review, ref_data, tracker, model=decompose_model)
                         )
 
                 project.decomposition_trees[dig_id] = json.loads(tree.model_dump_json())
@@ -873,7 +909,11 @@ async def decompose_estimate(request: Request):
     dig_ids = body.get("dig_ids", [])
     max_depth = body.get("max_depth", project.decomposition_settings.max_depth)
     max_breadth = body.get("max_breadth", project.decomposition_settings.max_breadth)
-    model = body.get("model", project.decomposition_settings.model)
+    model = body.get("model", config.DECOMPOSE_MODEL)
+
+    # Empty dig_ids means "all DIGs"
+    if not dig_ids and project.reference_data:
+        dig_ids = list(project.reference_data.get("digs", {}).keys())
 
     pricing = MODEL_PRICING.get(model, {})
     input_rate = pricing.get("input_per_mtok", 0.0)
@@ -1008,6 +1048,18 @@ async def model_upload(file: UploadFile = File(...)):
     }
 
 
+@app.get("/model/data")
+async def model_data():
+    """Return current project model data (layers, requirements, links)."""
+    project = _require_project()
+    return {
+        "layers": project.layers,
+        "requirements": [json.loads(r.model_dump_json()) for r in project.requirements],
+        "links": [json.loads(l.model_dump_json()) for l in project.links],
+        "instructions": project.instructions,
+    }
+
+
 @app.get("/model/queue")
 async def model_queue():
     """Get requirements available for modeling."""
@@ -1066,7 +1118,7 @@ async def model_estimate(request: Request):
     body = await request.json()
     req_ids = body.get("req_ids", body.get("selected_requirements", []))
     layers = body.get("layers", body.get("selected_layers", project.model_settings.selected_layers))
-    model = body.get("model", project.model_settings.model or config.MBSE_MODEL)
+    model = body.get("model", config.MBSE_MODEL)
 
     pricing = MODEL_PRICING.get(model, {})
     input_rate = pricing.get("input_per_mtok", 0.0)
@@ -1138,7 +1190,7 @@ async def model_run(request: Request):
                 job.status = "failed"
                 return
 
-            model_name = project.model_settings.model or config.MBSE_MODEL
+            model_name = config.MBSE_MODEL
 
             def _emit(event):
                 job.emit(event)
@@ -1231,7 +1283,7 @@ async def model_chat(request: Request):
     from src.model.agent.chat import chat_with_agent
     from src.core.cost_tracker import CostTracker
 
-    tracker = CostTracker(model=project.model_settings.model or config.MBSE_MODEL)
+    tracker = CostTracker(model=config.MBSE_MODEL)
 
     try:
         response_text, updated_history = await asyncio.get_event_loop().run_in_executor(
@@ -1276,7 +1328,8 @@ async def model_retry_instructions(request: Request):
     from src.core.cost_tracker import CostTracker
     from src.core.llm_client import create_client
 
-    tracker = CostTracker(model=project.model_settings.model or config.MBSE_MODEL)
+    mbse_model = config.MBSE_MODEL
+    tracker = CostTracker(model=mbse_model)
 
     try:
         def _emit(event):
@@ -1288,8 +1341,9 @@ async def model_retry_instructions(request: Request):
                 project.project.mode,
                 {"layers": project.layers},
                 tracker,
-                client=create_client(),
+                client=create_client(model=mbse_model),
                 emit=_emit,
+                model=mbse_model,
             ),
         )
         push_undo(project)

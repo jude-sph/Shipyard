@@ -14,6 +14,7 @@ def refine_tree(
     judge_review: SemanticReview,
     ref_data: WorkbookData,
     cost_tracker: CostTracker,
+    model: str | None = None,
 ) -> RequirementTree:
     """Refine a requirement tree based on semantic judge feedback."""
     logger.info("Refining tree based on judge feedback...")
@@ -39,7 +40,7 @@ def refine_tree(
     )
 
     try:
-        result = call_llm(prompt, cost_tracker, "refine", 0, max_tokens=8192)
+        result = call_llm(prompt, cost_tracker, "refine", 0, max_tokens=8192, model=model)
 
         refined_root = _parse_node(result.get("root", result))
         refined_tree = RequirementTree(
