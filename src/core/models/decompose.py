@@ -46,7 +46,16 @@ class RequirementNode(BaseModel):
     def validate_allocation(self) -> RequirementNode:
         valid = {"GTR", "SDS", "GTR / SDS"}
         if self.allocation not in valid:
-            raise ValueError(f"Invalid allocation '{self.allocation}', must be one of {valid}")
+            # Coerce common LLM misformats before rejecting
+            upper = self.allocation.upper().strip()
+            if "GTR" in upper and "SDS" in upper:
+                self.allocation = "GTR / SDS"
+            elif "GTR" in upper:
+                self.allocation = "GTR"
+            elif "SDS" in upper:
+                self.allocation = "SDS"
+            else:
+                self.allocation = "Information Not Found"
         return self
 
 

@@ -101,7 +101,9 @@ def _make_request(client, model: str, provider: str, prompt: str, max_tokens: in
 
 
 def _extract_json(text: str) -> str:
-    """Extract JSON from LLM response, handling markdown code blocks."""
+    """Extract JSON from LLM response, handling markdown code blocks and think tags."""
+    # Strip <think>...</think> blocks (e.g. from qwen/deepseek reasoning models)
+    text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
     if "```json" in text:
         text = text.split("```json")[1].split("```")[0]
     elif "```" in text:
