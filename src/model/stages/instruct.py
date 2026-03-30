@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 
 
-def generate_instructions(mode: str, model_data: dict, tracker: CostTracker, client=None, emit=None) -> dict:
+def generate_instructions(mode: str, model_data: dict, tracker: CostTracker, client=None, emit=None, model: str | None = None) -> dict:
     """Stage 5: Generate tool-specific recreation instructions. Returns {tool: ..., steps: [...]}.
 
     For large models, generates instructions per layer and merges them to avoid
@@ -28,7 +28,7 @@ def generate_instructions(mode: str, model_data: dict, tracker: CostTracker, cli
         model_json = json.dumps(model_data, indent=2)
         prompt = template.format(model=model_json)
         return call_llm(prompt=prompt, cost_tracker=tracker, call_type="instruct",
-                        stage="instruct", max_tokens=8192, client=client)
+                        stage="instruct", max_tokens=8192, client=client, model=model)
 
     # For larger models, generate instructions per layer and merge
     all_steps = []
@@ -42,7 +42,7 @@ def generate_instructions(mode: str, model_data: dict, tracker: CostTracker, cli
     prompt += "\n\nIMPORTANT: Only output the initial project setup steps (creating the project, configuring the profile). Do NOT output steps for individual elements -- those will be generated separately. Keep it to 3-5 setup steps maximum."
     try:
         result = call_llm(prompt=prompt, cost_tracker=tracker, call_type="instruct",
-                          stage="instruct_setup", max_tokens=4096, client=client)
+                          stage="instruct_setup", max_tokens=4096, client=client, model=model)
         for step in result.get("steps", []):
             step["step"] = step_num
             all_steps.append(step)
@@ -65,7 +65,7 @@ def generate_instructions(mode: str, model_data: dict, tracker: CostTracker, cli
         prompt += f"\n\nIMPORTANT: Only output steps for the {layer_key} layer elements shown above. Do NOT include project setup steps. Start step numbering at {step_num}."
         try:
             result = call_llm(prompt=prompt, cost_tracker=tracker, call_type="instruct",
-                              stage=f"instruct_{layer_key}", max_tokens=4096, client=client)
+                              stage=f"instruct_{layer_key}", max_tokens=4096, client=client, model=model)
             for step in result.get("steps", []):
                 step["step"] = step_num
                 step["layer"] = layer_key

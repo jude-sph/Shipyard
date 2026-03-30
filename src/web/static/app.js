@@ -387,6 +387,14 @@ async function loadModelData() {
         currentModel = data;
         renderModelTree(data.layers);
         renderCoverage(data.requirements, data.links);
+        // Populate req preview if requirements exist but preview is empty
+        if (data.requirements && data.requirements.length > 0) {
+            var existingCheckboxes = document.querySelectorAll('#req-preview-list .req-checkbox');
+            if (existingCheckboxes.length === 0) {
+                parsedRequirements = data.requirements;
+                populateReqPreview(parsedRequirements);
+            }
+        }
         // Refresh active tab
         var activeTab = document.querySelector('.tab-btn.active');
         if (activeTab) {
@@ -477,7 +485,9 @@ async function loadDigs() {
         var res = await fetch('/decompose/digs');
         if (!res.ok) return;
         var data = await res.json();
-        allDigs = data.digs || [];
+        allDigs = (Array.isArray(data) ? data : data.digs || []).map(function (d) {
+            return { id: d.dig_id || d.id, text: d.dig_text || d.text };
+        });
     } catch (e) {
         // silently ignore
     }
@@ -546,9 +556,10 @@ function renderDigTags() {
 }
 
 function getSelectedDigIds() {
-    if (selectedDigs.length > 0) return selectedDigs.join(',');
+    if (selectedDigs.length > 0) return selectedDigs;
     var input = $('dig-search');
-    return input ? input.value.trim() : '';
+    var val = input ? input.value.trim() : '';
+    return val ? val.split(',').map(function (s) { return s.trim(); }).filter(Boolean) : [];
 }
 
 // --- Run ---

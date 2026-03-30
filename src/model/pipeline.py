@@ -193,13 +193,13 @@ def run_pipeline(
     emit: callback for SSE events, called with {"stage": ..., "status": ..., "detail": ...}
     """
     tracker = CostTracker(model=model, cost_log_path=cost_log_path)
-    client = create_client()
+    client = create_client(model=model)
     _emit = emit or (lambda e: None)
 
     # Stage 1: Analyze
     _emit({"stage": "analyze", "status": "running", "detail": "Analyzing requirements..."})
     analysis = _run_with_retry(
-        lambda: analyze_requirements(requirements, tracker, client=client),
+        lambda: analyze_requirements(requirements, tracker, client=client, model=model),
         "analyze", _emit,
     )
     flagged_count = len(analysis.get("flagged", []))
@@ -217,7 +217,7 @@ def run_pipeline(
         _emit({"stage": "generate", "status": "running", "detail": f"Generating {layer_key} ({i}/{len(selected_layers)})...", "cost": tracker.format_cost_line()})
         existing_elements = existing_model.layers.get(layer_key) if existing_model else None
         layers[layer_key] = _run_with_retry(
-            lambda lk=layer_key, ee=existing_elements: generate_layer(mode, lk, requirements, tracker, client=client, existing_elements=ee),
+            lambda lk=layer_key, ee=existing_elements: generate_layer(mode, lk, requirements, tracker, client=client, existing_elements=ee, model=model),
             "generate", _emit,
         )
         _emit({"stage": "generate", "status": "layer_complete", "detail": f"{layer_key} complete", "cost": tracker.format_cost_line()})
@@ -228,7 +228,7 @@ def run_pipeline(
     _emit({"stage": "link", "status": "running", "detail": "Generating cross-element links...", "cost": tracker.format_cost_line()})
     existing_links_payload = [l.model_dump() for l in existing_model.links] if existing_model else None
     link_result = _run_with_retry(
-        lambda: generate_links(mode, layers, requirements, tracker, client=client, existing_links=existing_links_payload),
+        lambda: generate_links(mode, layers, requirements, tracker, client=client, existing_links=existing_links_payload, model=model),
         "link", _emit,
     )
     links = [Link(**l) for l in link_result.get("links", [])]
@@ -246,7 +246,7 @@ def run_pipeline(
         else:
             instruct_model_data = {"layers": layers}
         instructions = _run_with_retry(
-            lambda: generate_instructions(mode, instruct_model_data, tracker, client=client, emit=_emit),
+            lambda: generate_instructions(mode, instruct_model_data, tracker, client=client, emit=_emit, model=model),
             "instruct", _emit,
         )
         _emit({"stage": "instruct", "status": "complete", "detail": "Instructions generated", "cost": tracker.format_cost_line()})

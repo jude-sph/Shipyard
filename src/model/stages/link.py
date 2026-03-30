@@ -8,7 +8,7 @@ from src.core.models.core import Requirement
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 
 
-def generate_links(mode: str, layers: dict, requirements: list[Requirement], tracker: CostTracker, client=None, existing_links=None) -> dict:
+def generate_links(mode: str, layers: dict, requirements: list[Requirement], tracker: CostTracker, client=None, existing_links=None, model: str | None = None) -> dict:
     """Stage 4: Generate cross-element links. Returns {links: [...]}."""
     template = (PROMPTS_DIR / "link.txt").read_text()
     reqs_json = json.dumps([r.model_dump() for r in requirements], indent=2)
@@ -37,4 +37,4 @@ def generate_links(mode: str, layers: dict, requirements: list[Requirement], tra
         mode=mode,
         existing_links=existing_links_context,
     )
-    return call_llm(prompt=prompt, cost_tracker=tracker, call_type="link", stage="link", client=client)
+    return call_llm(prompt=prompt, cost_tracker=tracker, call_type="link", stage="link", client=client, model=model)
