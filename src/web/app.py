@@ -891,9 +891,13 @@ async def decompose_estimate(request: Request):
     max_cost = min_cost * 1.5  # 50% buffer
 
     return {
+        "digs": num_digs,
         "num_digs": num_digs,
         "estimated_nodes": total_nodes,
+        "max_total_calls": total_nodes,
+        "total_calls": total_nodes,
         "model": model,
+        "est_cost_usd": round(max_cost, 4),
         "estimated_min_cost": round(min_cost, 4),
         "estimated_max_cost": round(max_cost, 4),
     }
@@ -1053,6 +1057,37 @@ async def model_restore(request: Request):
     save_project(project)
     current_project = project
     return {"status": "ok", "dismissed_count": len(project.dismissed_from_modeling)}
+
+
+@app.post("/model/estimate")
+async def model_estimate(request: Request):
+    """Dry-run cost estimate for MBSE model generation."""
+    project = _require_project()
+    body = await request.json()
+    req_ids = body.get("req_ids", body.get("selected_requirements", []))
+    layers = body.get("layers", body.get("selected_layers", project.model_settings.selected_layers))
+    model = body.get("model", project.model_settings.model or config.MBSE_MODEL)
+
+    pricing = MODEL_PRICING.get(model, {})
+    input_rate = pricing.get("input_per_mtok", 0.0)
+    output_rate = pricing.get("output_per_mtok", 0.0)
+
+    num_reqs = len(req_ids) if isinstance(req_ids, list) else 0
+    num_layers = len(layers) if isinstance(layers, list) else 0
+    # Each requirement × layer ≈ 1 API call (~1200 input, ~800 output tokens)
+    total_calls = num_reqs * max(num_layers, 1)
+    est_input = total_calls * 1200
+    est_output = total_calls * 800
+
+    min_cost = (est_input * input_rate + est_output * output_rate) / 1_000_000
+    max_cost = min_cost * 1.5
+
+    return {
+        "model": model,
+        "total_calls": total_calls,
+        "estimated_min_cost": round(min_cost, 4),
+        "estimated_max_cost": round(max_cost, 4),
+    }
 
 
 @app.post("/model/run")
