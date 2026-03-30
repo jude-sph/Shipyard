@@ -129,8 +129,8 @@ body {
     display: flex;
     flex-direction: column;
     flex: 1;
-    overflow-y: auto;
-    overflow-x: hidden;
+    min-height: 0;
+    overflow: hidden;
     min-width: 0;
 }
 
@@ -329,7 +329,7 @@ body {
 /* ── Decompose View ──────────────────────────────────────── */
 
 /* Input section */
-.input-section { padding: 20px 24px; border-bottom: 1px solid #1a1a2e; }
+.input-section { padding: 20px 24px; border-bottom: 1px solid #1a1a2e; flex-shrink: 0; overflow-y: auto; max-height: 40vh; }
 .input-row { display: flex; gap: 16px; align-items: start; }
 
 .upload-col { flex: 1; }
@@ -488,7 +488,7 @@ body {
 
 /* ── Decompose Results ───────────────────────────────────── */
 
-.results-section { padding: 20px 24px; flex: 1; overflow-y: auto; }
+.results-section { padding: 20px 24px; flex: 1; overflow-y: auto; min-height: 0; }
 .results-header {
     display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;
 }
@@ -647,7 +647,8 @@ body {
     flex: 1;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow-y: auto;
+    min-height: 0;
     background: var(--bg-body);
 }
 
@@ -876,8 +877,8 @@ body {
 /* ── Model Progress Area ─────────────────────────────────── */
 
 .progress-area {
-    padding: 32px 40px; display: flex; flex-direction: column;
-    align-items: center; justify-content: center; flex: 1; min-height: 0;
+    padding: 32px 40px 60px; display: flex; flex-direction: column;
+    align-items: center; justify-content: safe center; flex: 1; min-height: 0;
 }
 
 .progress-area .progress-header {

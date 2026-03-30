@@ -160,6 +160,13 @@ function switchMode(mode) {
         btn.classList.toggle('active', btn.getAttribute('data-mode') === mode);
     });
 
+    // Refresh data when switching tabs
+    if (mode === 'model') {
+        loadModelData();
+    } else if (mode === 'decompose') {
+        loadDecompResults();
+    }
+
     // Update agent suggested prompts
     renderSuggestedPrompts(mode);
 }
@@ -713,7 +720,7 @@ async function loadDecompResults() {
         var res = await fetch('/decompose/results');
         if (!res.ok) return;
         var data = await res.json();
-        allDecompResults = data.results || [];
+        allDecompResults = Array.isArray(data) ? data : (data.results || []);
         renderDecompResults(allDecompResults);
     } catch (e) {
         // No results yet
@@ -746,7 +753,7 @@ function renderDecompResults(results) {
         return;
     }
 
-    var totalNodes = results.reduce(function (s, r) { return s + (r.nodes || 0); }, 0);
+    var totalNodes = results.reduce(function (s, r) { return s + (r.num_nodes || r.nodes || 0); }, 0);
     if (countEl) countEl.textContent = 'RESULTS \u2014 ' + results.length + ' DIGS, ' + totalNodes + ' REQUIREMENTS';
 
     results.forEach(function (r) {
@@ -771,8 +778,8 @@ function renderDecompResult(r) {
     headerLeft.appendChild(el('span', { className: badgeClass, textContent: badgeText }));
 
     var headerRight = el('div', { className: 'result-card-right' });
-    headerRight.appendChild(el('span', { className: 'result-levels', textContent: (r.levels || 0) + ' levels' }));
-    headerRight.appendChild(el('span', { className: 'result-nodes', textContent: (r.nodes || 0) + ' nodes' }));
+    headerRight.appendChild(el('span', { className: 'result-levels', textContent: (r.max_depth || r.levels || 0) + ' levels' }));
+    headerRight.appendChild(el('span', { className: 'result-nodes', textContent: (r.num_nodes || r.nodes || 0) + ' nodes' }));
     headerRight.appendChild(el('span', { className: 'result-cost', textContent: formatCost(r.cost || 0) }));
 
     // Expand button
@@ -1333,6 +1340,8 @@ async function executeModelRun(settings) {
 function showModelProgress(settings) {
     var area = $('model-progress');
     if (area) area.classList.remove('hidden');
+    var tabContent = $('tab-content');
+    if (tabContent) tabContent.classList.add('hidden');
     var costEl = $('model-running-cost');
     if (costEl) costEl.textContent = '';
 
@@ -1372,6 +1381,8 @@ function showModelProgress(settings) {
 function hideModelProgress() {
     var area = $('model-progress');
     if (area) area.classList.add('hidden');
+    var tabContent = $('tab-content');
+    if (tabContent) tabContent.classList.remove('hidden');
 }
 
 async function cancelModelJob() {
