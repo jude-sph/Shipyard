@@ -1558,6 +1558,7 @@ body {
 .req-preview-item {
     display: flex; align-items: center; gap: 6px;
     padding: 3px 6px; font-size: 11px; border-radius: 3px;
+    user-select: none;
 }
 .req-preview-item:hover { background: #111128; }
 .req-preview-item input[type="checkbox"] { flex-shrink: 0; }
