@@ -49,7 +49,7 @@ def _decompose_level(client, dig_id, dig_text, target_level, ancestors, refs, ma
     target_name = LEVEL_NAMES.get(target_level, f"Level {target_level}")
     parent_name = LEVEL_NAMES.get(target_level - 1, "DIG") if target_level > 1 else "DIG"
     prompt = format_decompose_prompt(dig_id=dig_id, dig_text=dig_text, target_level=target_level, target_level_name=target_name, parent_scope=parent_name, child_scope=target_name, parent_chain=_build_parent_chain(ancestors), system_hierarchy=refs["system_hierarchy"], chapter_list=refs["all_chapters"], max_breadth=max_breadth)
-    result = call_llm(prompt, cost_tracker, "decompose", target_level, client=client, model=model)
+    result = call_llm(prompt, cost_tracker, "decompose", stage=f"level_{target_level}", client=client, model=model, level=target_level)
     if result.get("decomposition_complete", False):
         logger.info(f"  L{target_level}: Decomposition complete (no further breakdown)")
         return []
