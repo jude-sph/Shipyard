@@ -26,6 +26,7 @@ let parsedRequirements = [];
 let _pendingModelSettings = null;
 let _stageTimers = {};
 let _elapsedInterval = null;
+let _lastCheckedReqIndex = null;
 
 // DOM helper — create element safely (no innerHTML)
 function el(tag, attrs, children) {
@@ -1081,22 +1082,67 @@ function populateReqPreview(reqs) {
     if (!section || !list) return;
     clearChildren(list);
 
-    reqs.forEach(function (req) {
-        var item = el('div', { className: 'req-preview-item' });
-        var cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.className = 'req-checkbox';
-        cb.value = req.id;
-        cb.checked = true;
-        cb.addEventListener('change', updateReqSelectedCount);
+    _lastCheckedReqIndex = null;
 
-        item.appendChild(cb);
-        item.appendChild(el('span', { className: 'req-preview-id', textContent: req.id }));
-        var textSpan = el('span', { className: 'req-preview-text', textContent: req.text || '' });
-        if (req.text) textSpan.title = req.text;
-        item.appendChild(textSpan);
-        list.appendChild(item);
-    });
+    function handleReqCheck(cb, idx, shiftKey) {
+        if (shiftKey && _lastCheckedReqIndex !== null) {
+            var checkboxes = Array.from(document.querySelectorAll('#req-preview-list .req-checkbox'));
+            var from = Math.min(_lastCheckedReqIndex, idx);
+            var to = Math.max(_lastCheckedReqIndex, idx);
+            var state = cb.checked;
+            for (var i = from; i <= to; i++) {
+                checkboxes[i].checked = state;
+            }
+        }
+        _lastCheckedReqIndex = idx;
+        updateReqSelectedCount();
+    }
+
+    // Render in chunks via requestAnimationFrame to avoid freezing the browser
+    var CHUNK_SIZE = 200;
+    var i = 0;
+    function renderChunk() {
+        var end = Math.min(i + CHUNK_SIZE, reqs.length);
+        var frag = document.createDocumentFragment();
+        for (; i < end; i++) {
+            var req = reqs[i];
+            var idx = i;
+            var item = el('div', { className: 'req-preview-item' });
+            var cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.className = 'req-checkbox';
+            cb.value = req.id;
+            cb.checked = true;
+            cb.dataset.index = idx;
+            (function (cb, idx) {
+                cb.addEventListener('click', function (e) {
+                    handleReqCheck(cb, idx, e.shiftKey);
+                });
+                item.addEventListener('click', function (e) {
+                    if (e.target === cb) return;
+                    cb.checked = !cb.checked;
+                    handleReqCheck(cb, idx, e.shiftKey);
+                });
+            })(cb, idx);
+
+            item.appendChild(cb);
+            item.appendChild(el('span', { className: 'req-preview-id', textContent: req.id }));
+            var textSpan = el('span', { className: 'req-preview-text', textContent: req.text || '' });
+            if (req.text) textSpan.title = req.text;
+            item.appendChild(textSpan);
+            item.style.cursor = 'pointer';
+            frag.appendChild(item);
+        }
+        list.appendChild(frag);
+        if (i < reqs.length) {
+            requestAnimationFrame(renderChunk);
+        } else {
+            updateReqSelectedCount();
+        }
+    }
+    if (reqs.length > 0) {
+        renderChunk();
+    }
 
     section.classList.remove('hidden');
     updateReqSelectedCount();
@@ -1892,11 +1938,11 @@ function renderCoverage(reqs, links) {
     }
 
     var totalReqs = reqs.length;
+    var reqIdSet = new Set(reqs.map(function (r) { return r.id; }));
     var linkedReqIds = new Set();
     links.forEach(function (link) {
-        reqs.forEach(function (req) {
-            if (link.target === req.id || link.source === req.id) linkedReqIds.add(req.id);
-        });
+        if (reqIdSet.has(link.target)) linkedReqIds.add(link.target);
+        if (reqIdSet.has(link.source)) linkedReqIds.add(link.source);
     });
     var covered = linkedReqIds.size;
     var pct = Math.round((covered / totalReqs) * 100);

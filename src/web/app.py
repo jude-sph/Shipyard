@@ -966,14 +966,18 @@ async def model_upload(file: UploadFile = File(...)):
     with open(dest, "wb") as f:
         shutil.copyfileobj(file.file, f)
 
-    # Compute SHA-256
+    # Compute SHA-256 and parse requirements off the event loop
     import hashlib
-    sha = hashlib.sha256(dest.read_bytes()).hexdigest()
-
-    # Parse requirements
     from src.core.parser import parse_requirements_file
+
+    loop = asyncio.get_event_loop()
+
+    sha = await loop.run_in_executor(
+        None, lambda: hashlib.sha256(dest.read_bytes()).hexdigest()
+    )
+
     try:
-        reqs = parse_requirements_file(dest)
+        reqs = await loop.run_in_executor(None, parse_requirements_file, dest)
     except Exception as exc:
         raise HTTPException(400, f"Failed to parse requirements: {exc}")
 
