@@ -82,12 +82,16 @@ document.addEventListener('DOMContentLoaded', function () {
     readSelectedLayers();
     initProviderSelector(cfg.settings);
     initAutoSendToggle(cfg.settings);
+    updateActiveModelDisplay(cfg.settings);
     renderSuggestedPrompts(currentMode);
     checkForUpdates();
 
     // If a project is loaded, refresh everything
     if (currentProject && currentProject.slug) {
         refreshAll();
+    } else if (!currentProject) {
+        // First launch — show guidance
+        showToast('Welcome to Shipyard! Click the project selector to create or load a project.', 'info', 6000);
     }
 
     // Close dropdowns on outside click
@@ -646,6 +650,8 @@ async function proceedAfterCost() {
 }
 
 async function executeDecompRun(body) {
+    var runBtn = document.querySelector('.btn-run');
+    if (runBtn) { runBtn.disabled = true; runBtn.textContent = '\u23F3 Running...'; }
     try {
         var res = await fetch('/decompose/run', {
             method: 'POST',
@@ -702,6 +708,8 @@ function showDecompProgress() {
 function hideDecompProgress() {
     var section = $('decomp-progress');
     if (section) section.classList.add('hidden');
+    var runBtn = document.querySelector('.btn-run');
+    if (runBtn) { runBtn.disabled = false; runBtn.textContent = '\u25B6 Run'; }
 }
 
 async function cancelDecompJob() {
@@ -1051,6 +1059,24 @@ function applyToolMode(mode) {
         btn.classList.toggle('active', btn.getAttribute('data-mode') === mode);
     });
     initLayerCheckboxes();
+}
+
+// --- Active model display ---
+function updateActiveModelDisplay(settings) {
+    var el = $('active-model');
+    if (!el) return;
+    var modelId = (settings && (settings.mbse_model || settings.decompose_model || settings.model)) || 'claude-sonnet-4-6';
+    // Look up friendly name from catalogue
+    var cfg = window.SHIPYARD_CONFIG || {};
+    var catalogue = cfg.modelCatalogue || [];
+    var name = modelId;
+    for (var i = 0; i < catalogue.length; i++) {
+        if (catalogue[i].id === modelId) {
+            name = catalogue[i].name;
+            break;
+        }
+    }
+    el.textContent = name;
 }
 
 // --- Provider selector ---
@@ -1647,15 +1673,17 @@ function startInlineEdit(row, layerKey, collKey, elem) {
 
 async function saveInlineEdit(row, layerKey, collKey, elem, newName, nameSpan) {
     try {
-        var res = await fetch('/model/chat', {
-            method: 'POST',
+        var res = await fetch('/model/element', {
+            method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                message: 'Rename element ' + elem.id + ' to "' + newName + '"',
-                mode: 'model',
+                layer: layerKey,
+                collection: collKey,
+                id: elem.id,
+                updates: { name: newName },
             }),
         });
-        var data = await res.json();
+        if (!res.ok) throw new Error((await res.json()).detail || 'Update failed');
 
         if (currentModel && currentModel.layers && currentModel.layers[layerKey] && currentModel.layers[layerKey][collKey]) {
             var coll = currentModel.layers[layerKey][collKey];
@@ -1683,12 +1711,13 @@ async function deleteElement(elementId, layerKey, collKey) {
     if (!confirm('Delete element ' + elementId + '?')) return;
 
     try {
-        var res = await fetch('/model/chat', {
-            method: 'POST',
+        var res = await fetch('/model/element', {
+            method: 'DELETE',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                message: 'Remove element ' + elementId,
-                mode: 'model',
+                layer: layerKey,
+                collection: collKey,
+                id: elementId,
             }),
         });
         if (res.ok) {
@@ -1749,12 +1778,13 @@ function showAddElementForm(layerKey, collKey, listDiv, addBtn) {
 
 async function addElement(layerKey, collKey, newElem) {
     try {
-        var res = await fetch('/model/chat', {
+        var res = await fetch('/model/element', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                message: 'Add element ' + newElem.id + ' "' + newElem.name + '" to ' + layerKey + '/' + collKey,
-                mode: 'model',
+                layer: layerKey,
+                collection: collKey,
+                element: newElem,
             }),
         });
         if (res.ok) {
@@ -2579,6 +2609,7 @@ async function saveSettings() {
             if (statusEl && body.auto_send !== undefined) {
                 statusEl.textContent = body.auto_send ? 'ON' : 'OFF';
             }
+            updateActiveModelDisplay(cfg.settings);
             closeSettings();
             showToast('Settings saved', 'success');
         } else {
@@ -2843,7 +2874,7 @@ function exportFullProject() {
 
 async function performUndo() {
     try {
-        var res = await fetch('/model/undo', { method: 'POST' });
+        var res = await fetch('/project/undo', { method: 'POST' });
         if (res.ok) {
             var data = await res.json();
             currentModel = data;
@@ -2860,7 +2891,7 @@ async function performUndo() {
 
 async function performRedo() {
     try {
-        var res = await fetch('/model/redo', { method: 'POST' });
+        var res = await fetch('/project/redo', { method: 'POST' });
         if (res.ok) {
             var data = await res.json();
             currentModel = data;
@@ -2889,8 +2920,9 @@ async function forceSave() {
 // 16. UTILITIES
 // =============================================================================
 
-function showToast(message, type) {
+function showToast(message, type, duration) {
     type = type || 'info';
+    duration = duration || 4000;
     var container = $('toast-container');
     if (!container) return;
     var toast = el('div', { className: 'toast toast-' + type, textContent: message });
@@ -2900,7 +2932,7 @@ function showToast(message, type) {
     setTimeout(function () {
         toast.classList.remove('toast-show');
         setTimeout(function () { toast.remove(); }, 300);
-    }, 4000);
+    }, duration);
 }
 
 function showError(msg) {
