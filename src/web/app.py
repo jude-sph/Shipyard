@@ -105,6 +105,7 @@ def _reload_config():
     config.OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
     config.DECOMPOSE_MODEL = os.getenv("DECOMPOSE_MODEL", "claude-sonnet-4-6")
     config.MBSE_MODEL = os.getenv("MBSE_MODEL", "claude-sonnet-4-6")
+    config.LOCAL_LLM_URL = os.getenv("LOCAL_LLM_URL", "http://localhost:11434")
 
 
 def _slugify(name: str) -> str:
@@ -141,8 +142,8 @@ async def index(request: Request):
                 "decompose_model": config.DECOMPOSE_MODEL,
                 "mbse_model": config.MBSE_MODEL,
                 "default_mode": config.DEFAULT_MODE,
-                "anthropic_key_set": bool(config.ANTHROPIC_API_KEY),
-                "openrouter_key_set": bool(config.OPENROUTER_API_KEY),
+                "has_anthropic_key": bool(config.ANTHROPIC_API_KEY),
+                "has_openrouter_key": bool(config.OPENROUTER_API_KEY),
                 "local_url": config.LOCAL_LLM_URL,
                 "auto_send": True,
             }
@@ -153,8 +154,8 @@ async def index(request: Request):
                 "settings": json.dumps(settings_data),
                 "project": json.dumps(project_data),
             })
-        except Exception:
-            pass  # Fall through to JSON fallback
+        except Exception as exc:
+            logger.warning(f"Template rendering failed: {exc}")  # Fall through to JSON fallback
     return {
         "app": "Shipyard",
         "status": "running",
@@ -207,6 +208,14 @@ async def select_project(project_id: str):
     current_project = project
     current_project_name = project.project.name
     return json.loads(project.model_dump_json())
+
+
+@app.post("/project/save")
+async def save_current_project():
+    """Explicit save of the current project."""
+    project = _require_project()
+    save_project(project)
+    return {"status": "ok"}
 
 
 @app.post("/project/rename")
@@ -366,6 +375,7 @@ async def update_settings(request: Request):
         f"DEFAULT_MODE={body.get('default_mode', config.DEFAULT_MODE)}",
         f"DECOMPOSE_MODEL={decompose_model}",
         f"MBSE_MODEL={mbse_model}",
+        f"LOCAL_LLM_URL={body.get('local_url', config.LOCAL_LLM_URL)}",
         "",
     ]
     ak = body.get("anthropic_key", "").strip() or config.ANTHROPIC_API_KEY
@@ -406,7 +416,7 @@ async def toggle_auto_send(request: Request):
     global current_project
     project = _require_project()
     body = await request.json()
-    enabled = body.get("enabled", True)
+    enabled = body.get("auto_send", body.get("enabled", True))
 
     push_undo(project)
     project.auto_send = enabled
@@ -1381,6 +1391,94 @@ async def model_settings(request: Request):
     save_project(project)
     current_project = project
     return {"status": "ok", "model_settings": json.loads(project.model_settings.model_dump_json())}
+
+
+@app.put("/model/element")
+async def update_element(request: Request):
+    """Rename or update a model element."""
+    global current_project
+    project = _require_project()
+    body = await request.json()
+    layer_key = body.get("layer")
+    coll_key = body.get("collection")
+    elem_id = body.get("id")
+    updates = body.get("updates", {})
+
+    if not layer_key or not coll_key or not elem_id:
+        raise HTTPException(400, "layer, collection, and id are required")
+
+    layer = project.layers.get(layer_key)
+    if not layer or coll_key not in layer:
+        raise HTTPException(404, f"Layer '{layer_key}/{coll_key}' not found")
+
+    push_undo(project)
+    coll = layer[coll_key]
+    found = False
+    for elem in coll:
+        if isinstance(elem, dict) and elem.get("id") == elem_id:
+            elem.update(updates)
+            found = True
+            break
+    if not found:
+        raise HTTPException(404, f"Element '{elem_id}' not found")
+
+    save_project(project)
+    current_project = project
+    return {"status": "ok"}
+
+
+@app.delete("/model/element")
+async def delete_element_endpoint(request: Request):
+    """Delete a model element."""
+    global current_project
+    project = _require_project()
+    body = await request.json()
+    layer_key = body.get("layer")
+    coll_key = body.get("collection")
+    elem_id = body.get("id")
+
+    if not layer_key or not coll_key or not elem_id:
+        raise HTTPException(400, "layer, collection, and id are required")
+
+    layer = project.layers.get(layer_key)
+    if not layer or coll_key not in layer:
+        raise HTTPException(404, f"Layer '{layer_key}/{coll_key}' not found")
+
+    push_undo(project)
+    original_len = len(layer[coll_key])
+    layer[coll_key] = [e for e in layer[coll_key] if not (isinstance(e, dict) and e.get("id") == elem_id)]
+    if len(layer[coll_key]) == original_len:
+        raise HTTPException(404, f"Element '{elem_id}' not found")
+
+    save_project(project)
+    current_project = project
+    return {"status": "ok"}
+
+
+@app.post("/model/element")
+async def add_element_endpoint(request: Request):
+    """Add a new element to a model layer."""
+    global current_project
+    project = _require_project()
+    body = await request.json()
+    layer_key = body.get("layer")
+    coll_key = body.get("collection")
+    element = body.get("element")
+
+    if not layer_key or not coll_key or not element:
+        raise HTTPException(400, "layer, collection, and element are required")
+
+    if layer_key not in project.layers:
+        project.layers[layer_key] = {}
+    if coll_key not in project.layers[layer_key]:
+        project.layers[layer_key][coll_key] = []
+
+    push_undo(project)
+    project.layers[layer_key][coll_key].append(element)
+
+    save_project(project)
+    current_project = project
+    return {"status": "ok"}
 
 
 # ---------------------------------------------------------------------------

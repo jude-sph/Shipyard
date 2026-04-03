@@ -1,5 +1,6 @@
 import copy
 import json
+import logging
 import re
 import shutil
 from datetime import datetime, timezone
@@ -7,6 +8,8 @@ from pathlib import Path
 
 from src.core import config
 from src.core.models.core import ProjectModel, ProjectMeta, Meta
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -80,7 +83,8 @@ def load_project(name_or_slug: str, projects_dir: Path | None = None) -> Project
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
         return ProjectModel.model_validate(data)
-    except Exception:
+    except Exception as exc:
+        logger.warning(f"Failed to load project '{name_or_slug}': {exc}")
         return None
 
 
@@ -105,7 +109,8 @@ def list_projects(projects_dir: Path | None = None) -> list[dict]:
                 "modified": project_meta.get("last_modified"),
                 "path": str(json_path),
             })
-        except Exception:
+        except Exception as exc:
+            logger.warning(f"Skipping corrupted project at {json_path}: {exc}")
             continue
     return results
 

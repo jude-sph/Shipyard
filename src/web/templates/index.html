@@ -12,7 +12,7 @@
     <header id="top-bar">
         <div class="header-left">
             <span class="logo">&#9875; Shipyard</span>
-            <span class="version">v1.3.0</span>
+            <span class="version">v1.3.1</span>
             <!-- Mode tabs -->
             <div class="mode-tabs">
                 <button class="mode-tab active" data-mode="decompose" onclick="switchMode('decompose')">Decompose</button>
@@ -28,7 +28,7 @@
         </div>
         <div class="header-right">
             <span class="auto-send-toggle" onclick="toggleAutoSend()">Auto-send: <span id="auto-send-status">ON</span></span>
-            <span class="model-indicator"><span class="dot"></span> <span id="active-model">claude-sonnet-4-6</span></span>
+            <span class="model-indicator"><span class="dot"></span> <span id="active-model"></span></span>
             <button class="btn-icon" onclick="openSettings()">&#9881; Settings</button>
             <button id="agent-toggle" class="btn-icon" onclick="toggleAgent()">&#9670; Agent</button>
         </div>
@@ -539,6 +539,13 @@
 
     <!-- Toast Container -->
     <div id="toast-container" class="toast-container"></div>
+
+    <!-- Keyboard shortcut hints -->
+    <div class="shortcut-bar">
+        <span class="shortcut-hint"><kbd>Ctrl+Z</kbd> Undo</span>
+        <span class="shortcut-hint"><kbd>Ctrl+Shift+Z</kbd> Redo</span>
+        <span class="shortcut-hint"><kbd>Ctrl+S</kbd> Save</span>
+    </div>
 
     <!-- Data for JavaScript -->
     <script>
