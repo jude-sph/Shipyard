@@ -1201,6 +1201,7 @@ async def model_run(request: Request):
             def _emit(event):
                 job.emit(event)
 
+            skip_instruct = body.get("skip_instruct", False)
             result = await asyncio.get_event_loop().run_in_executor(
                 None,
                 lambda: run_pipeline(
@@ -1211,6 +1212,7 @@ async def model_run(request: Request):
                     provider=config.PROVIDER,
                     emit=_emit,
                     existing_model=project if project.layers else None,
+                    skip_instruct=skip_instruct,
                 ),
             )
 
@@ -1227,6 +1229,7 @@ async def model_run(request: Request):
             )
 
             save_project(project)
+            current_project = project
             job.status = "complete"
             job.emit({"type": "complete"})
         except Exception as exc:
