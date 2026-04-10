@@ -453,7 +453,7 @@ async def cost_history():
 async def check_updates():
     """Git-based update check."""
     import subprocess
-    pkg_root = str(config.PACKAGE_ROOT)
+    pkg_root = str(config.PACKAGE_ROOT.parent)
     try:
         git_check = subprocess.run(
             ["git", "--version"], capture_output=True, text=True
@@ -526,11 +526,13 @@ async def check_updates():
 async def update_software():
     """Git pull + pip install."""
     import subprocess
+    # Use repo root (parent of src/) for both git and pip
+    repo_root = str(config.PACKAGE_ROOT.parent)
     try:
         pull = subprocess.run(
             ["git", "pull"],
             capture_output=True, text=True,
-            cwd=str(config.PACKAGE_ROOT), timeout=30,
+            cwd=repo_root, timeout=30,
         )
         if pull.returncode != 0:
             return {
@@ -548,7 +550,7 @@ async def update_software():
         subprocess.run(
             [sys.executable, "-m", "pip", "install", "-e", ".", "-q"],
             capture_output=True, text=True,
-            cwd=str(config.PACKAGE_ROOT), timeout=60,
+            cwd=repo_root, timeout=60,
         )
 
         return {
