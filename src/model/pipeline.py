@@ -187,6 +187,7 @@ def run_pipeline(
     emit: Callable[[dict], None] | None = None,
     cost_log_path: Path | None = None,
     existing_model: ProjectModel | None = None,
+    skip_instruct: bool = False,
 ) -> MBSEModel:
     """Run the full 5-stage pipeline. Returns an MBSEModel.
 
@@ -236,24 +237,27 @@ def run_pipeline(
 
     # Stage 5: Instruct — use the full accumulated model when an existing_model is provided (non-fatal)
     tool_name = "Capella 7.0" if mode == "capella" else "IBM Rhapsody 10.0"
-    try:
-        _emit({"stage": "instruct", "status": "running", "detail": "Generating recreation instructions...", "cost": tracker.format_cost_line()})
-        if existing_model:
-            # Build the full merged layer view: existing layers + newly generated layers
-            full_layers = dict(existing_model.layers)
-            full_layers.update(layers)
-            instruct_model_data = {"layers": full_layers}
-        else:
-            instruct_model_data = {"layers": layers}
-        instructions = _run_with_retry(
-            lambda: generate_instructions(mode, instruct_model_data, tracker, client=client, emit=_emit, model=model),
-            "instruct", _emit,
-        )
-        _emit({"stage": "instruct", "status": "complete", "detail": "Instructions generated", "cost": tracker.format_cost_line()})
-    except Exception as exc:
-        logger.warning(f"Instruct stage failed: {exc}. Continuing without instructions.")
-        instructions = {"tool": tool_name, "steps": [], "error": str(exc)}
-        _emit({"stage": "instruct", "status": "complete", "detail": "Instructions failed - you can retry from the Instructions tab", "cost": tracker.format_cost_line()})
+    if skip_instruct:
+        instructions = {"tool": tool_name, "steps": [], "skipped": True}
+        _emit({"stage": "instruct", "status": "complete", "detail": "Skipped (can generate later from Instructions tab)", "cost": tracker.format_cost_line()})
+    else:
+        try:
+            _emit({"stage": "instruct", "status": "running", "detail": "Generating recreation instructions...", "cost": tracker.format_cost_line()})
+            if existing_model:
+                full_layers = dict(existing_model.layers)
+                full_layers.update(layers)
+                instruct_model_data = {"layers": full_layers}
+            else:
+                instruct_model_data = {"layers": layers}
+            instructions = _run_with_retry(
+                lambda: generate_instructions(mode, instruct_model_data, tracker, client=client, emit=_emit, model=model),
+                "instruct", _emit,
+            )
+            _emit({"stage": "instruct", "status": "complete", "detail": "Instructions generated", "cost": tracker.format_cost_line()})
+        except Exception as exc:
+            logger.warning(f"Instruct stage failed: {exc}. Continuing without instructions.")
+            instructions = {"tool": tool_name, "steps": [], "error": str(exc)}
+            _emit({"stage": "instruct", "status": "complete", "detail": "Instructions failed - you can retry from the Instructions tab", "cost": tracker.format_cost_line()})
 
     # Build final model
     model_obj = MBSEModel(

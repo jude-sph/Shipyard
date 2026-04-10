@@ -135,10 +135,12 @@ async function renderDiagramContent(pane) {
 
     var layerData = currentModel.layers[layerKey];
     var links = currentModel.links || [];
-    var definition = buildMermaidDefinition(layerKey, layerData, links);
+    var diagramResult = buildMermaidDefinition(layerKey, layerData, links);
+    var definition = diagramResult ? diagramResult.definition : null;
+    var warning = diagramResult ? diagramResult.warning : null;
 
     if (!definition) {
-        container.appendChild(el('div', { className: 'empty-state', textContent: 'No diagrammable data in this layer.' }));
+        container.appendChild(el('div', { className: 'empty-state', textContent: 'This layer has no elements to diagram. Try regenerating it or running a new batch.' }));
         return;
     }
 
@@ -156,12 +158,16 @@ async function renderDiagramContent(pane) {
     try {
         var id = 'dgm_' + myRender;
         var result = await mermaid.render(id, definition);
-        if (_diagramRenderCounter !== myRender) return; // stale — newer render superseded this one
+        if (_diagramRenderCounter !== myRender) return;
         clearChildren(container);
+
+        // Show partial data warning if applicable
+        if (warning) {
+            var warn = el('div', { className: 'diagram-warning', textContent: warning });
+            container.appendChild(warn);
+        }
+
         var svgString = (typeof result === 'object' && result.svg) ? result.svg : result;
-        // Mermaid SVG is trusted library-generated content from our own definition string.
-        // This is the only justified use of innerHTML in the codebase — Mermaid's render()
-        // returns an SVG string that cannot be injected via el() or textContent.
         var wrapper = document.createElement('div');
         wrapper.insertAdjacentHTML('afterbegin', svgString);
         while (wrapper.firstChild) container.appendChild(wrapper.firstChild);
@@ -176,6 +182,11 @@ async function renderDiagramContent(pane) {
         errDiv.appendChild(pre);
         container.appendChild(errDiv);
     }
+}
+
+function _diagramResult(lines, warning) {
+    if (lines.length <= 1) return null; // only header, no nodes
+    return { definition: lines.join('\n'), warning: warning || null };
 }
 
 // =============================================================================
@@ -210,18 +221,16 @@ function buildOADiagram(layer, links) {
     if (entities.length === 0) return null;
 
     var lines = ['graph LR'];
+    var warning = null;
 
-    // Build entity ID -> sanitized ID map
     var idMap = {};
     entities.forEach(function (e) {
         var nid = sanitizeId(e.id);
         idMap[e.id] = nid;
         idMap[e.name] = nid;
-        var label = sanitizeLabel(e.name);
-        lines.push('    ' + nid + '["' + label + '"]');
+        lines.push('    ' + nid + '["' + sanitizeLabel(e.name) + '"]');
     });
 
-    // Interactions as solid arrows
     interactions.forEach(function (i) {
         var src = idMap[i.source_entity] || sanitizeId(i.source_entity);
         var tgt = idMap[i.target_entity] || sanitizeId(i.target_entity);
@@ -230,7 +239,6 @@ function buildOADiagram(layer, links) {
         }
     });
 
-    // Communication means as dashed arrows
     comms.forEach(function (c) {
         var src = idMap[c.source_entity] || sanitizeId(c.source_entity);
         var tgt = idMap[c.target_entity] || sanitizeId(c.target_entity);
@@ -239,7 +247,11 @@ function buildOADiagram(layer, links) {
         }
     });
 
-    return lines.length > 1 ? lines.join('\n') : null;
+    if (interactions.length === 0 && comms.length === 0) {
+        warning = 'Partial diagram: entities found but no interactions or communication means were generated. The model run may not have produced sufficient relationship data for this layer.';
+    }
+
+    return _diagramResult(lines, warning);
 }
 
 // --- System Needs Analysis: functions + exchanges + actors ---
@@ -248,33 +260,31 @@ function buildSADiagram(layer, links) {
     var exchanges = layer.exchanges || [];
     var actors = layer.external_actors || [];
     var sysDefs = layer.system_definitions || [];
-    if (functions.length === 0 && actors.length === 0) return null;
+    if (functions.length === 0 && actors.length === 0 && sysDefs.length === 0) return null;
 
     var lines = ['graph TB'];
     var idMap = {};
+    var warning = null;
+    var missing = [];
 
-    // System definition as a box
     sysDefs.forEach(function (s) {
         var nid = sanitizeId(s.id);
         idMap[s.id] = nid;
         lines.push('    ' + nid + '["' + sanitizeLabel(s.name) + '"]');
     });
 
-    // External actors as stadium shape
     actors.forEach(function (a) {
         var nid = sanitizeId(a.id);
         idMap[a.id] = nid;
         lines.push('    ' + nid + '(["' + sanitizeLabel(a.name) + '"])');
     });
 
-    // Functions as rounded boxes
     functions.forEach(function (f) {
         var nid = sanitizeId(f.id);
         idMap[f.id] = nid;
         lines.push('    ' + nid + '("' + sanitizeLabel(f.name) + '")');
     });
 
-    // Exchanges as edges
     exchanges.forEach(function (ex) {
         var src = idMap[ex.source] || sanitizeId(ex.source);
         var tgt = idMap[ex.target] || sanitizeId(ex.target);
@@ -283,7 +293,14 @@ function buildSADiagram(layer, links) {
         }
     });
 
-    return lines.length > 1 ? lines.join('\n') : null;
+    if (functions.length === 0) missing.push('functions');
+    if (actors.length === 0) missing.push('external actors');
+    if (exchanges.length === 0) missing.push('exchanges');
+    if (missing.length > 0) {
+        warning = 'Partial diagram: no ' + missing.join(', ') + ' were generated. The model run produced limited data for this layer.';
+    }
+
+    return _diagramResult(lines, warning);
 }
 
 // --- Logical/Physical Architecture: components + exchanges ---
@@ -296,6 +313,7 @@ function buildArchDiagram(layer, links, variant) {
     var lines = ['graph TB'];
     var compIdMap = {};
     var fnIdMap = {};
+    var warning = null;
 
     // Components as subgraphs containing their functions
     var fnByComponent = {};
@@ -335,7 +353,6 @@ function buildArchDiagram(layer, links, variant) {
         }
     });
 
-    // Component exchanges
     compExchanges.forEach(function (ex) {
         var src = compIdMap[ex.source_component] || sanitizeId(ex.source_component);
         var tgt = compIdMap[ex.target_component] || sanitizeId(ex.target_component);
@@ -344,7 +361,13 @@ function buildArchDiagram(layer, links, variant) {
         }
     });
 
-    return lines.length > 1 ? lines.join('\n') : null;
+    if (compExchanges.length === 0 && functions.length === 0) {
+        warning = 'Partial diagram: components found but no functions or exchanges were generated.';
+    } else if (compExchanges.length === 0) {
+        warning = 'Partial diagram: no component exchanges were generated. Components are shown without connections.';
+    }
+
+    return _diagramResult(lines, warning);
 }
 
 // --- EPBS: PBS tree ---
@@ -381,7 +404,7 @@ function buildEPBSDiagram(layer) {
         });
     }
 
-    return lines.length > 1 ? lines.join('\n') : null;
+    return _diagramResult(lines);
 }
 
 // =============================================================================
@@ -424,7 +447,7 @@ function buildBDDDiagram(layer, links) {
         }
     });
 
-    return lines.length > 1 ? lines.join('\n') : null;
+    return _diagramResult(lines);
 }
 
 // --- Sequence Diagram ---
@@ -465,7 +488,7 @@ function buildSequenceDiagram(layer) {
         lines.push('    ' + from + arrow + to + ': ' + msg);
     });
 
-    return lines.length > 1 ? lines.join('\n') : null;
+    return _diagramResult(lines);
 }
 
 // --- State Machine ---
@@ -503,7 +526,7 @@ function buildStateDiagram(layer) {
         lines.push('    ' + src + ' --> ' + tgt + (label ? ' : ' + label : ''));
     });
 
-    return lines.length > 1 ? lines.join('\n') : null;
+    return _diagramResult(lines);
 }
 
 // =============================================================================

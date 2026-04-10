@@ -1316,10 +1316,13 @@ function gatherModelSettings() {
     var cfg = window.SHIPYARD_CONFIG || {};
     var settings = cfg.settings || {};
 
+    var skipInstruct = $('skip-instruct');
+
     return {
         mode: selectedToolMode,
         layers: selectedLayers.slice(),
         model: settings.mbse_model || settings.model || 'claude-sonnet-4-6',
+        skip_instruct: skipInstruct ? skipInstruct.checked : false,
     };
 }
 
