@@ -2707,7 +2707,8 @@ async function installUpdate() {
         if (data.status === 'ok' && data.updated) {
             var status = $('settings-update-status');
             if (status) status.textContent = 'Updated! Restart to apply.';
-            showToast('Update applied. Restart server to activate.', 'success');
+            if (btn) { btn.textContent = 'Updated'; btn.disabled = true; }
+            showToast('Update installed! Stop the server (Ctrl+C) and run "shipyard --web" again to apply.', 'success', 15000);
         } else {
             if (btn) btn.textContent = 'Check for Updates';
             if (btn) btn.disabled = false;
