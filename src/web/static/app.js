@@ -75,12 +75,10 @@ document.addEventListener('DOMContentLoaded', function () {
     // Initialize views
     loadProjectList();
     initModeSwitch();
-    initDragDrop();
     initTabSwitching();
     // Layer checkboxes are hardcoded in HTML for initial Capella mode.
     // initLayerCheckboxes() is called by setToolMode() when switching to Rhapsody.
     readSelectedLayers();
-    initProviderSelector(cfg.settings);
     initAutoSendToggle(cfg.settings);
     updateActiveModelDisplay(cfg.settings);
     renderSuggestedPrompts(currentMode);
@@ -206,6 +204,14 @@ async function loadProjectList() {
         });
         dropdown.appendChild(importBtn);
 
+        // Rename current project button
+        if (currentProject) {
+            var renameBtn = el('div', { className: 'dropdown-item dropdown-action' });
+            renameBtn.textContent = 'Rename Project...';
+            renameBtn.addEventListener('click', function () { renameProject(); });
+            dropdown.appendChild(renameBtn);
+        }
+
         if (data.projects && data.projects.length > 0) {
             dropdown.appendChild(el('div', { className: 'dropdown-divider' }));
             data.projects.forEach(function (proj) {
@@ -299,7 +305,7 @@ async function renameProject() {
         var res = await fetch('/project/rename', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: newName }),
+            body: JSON.stringify({ new_name: newName }),
         });
         if (res.ok) {
             currentProject.name = newName;
@@ -344,14 +350,6 @@ async function confirmDelete() {
     } catch (e) {
         showToast('Delete failed', 'error');
     }
-}
-
-async function downloadProject() {
-    if (!currentProject) {
-        showToast('No project to download', 'error');
-        return;
-    }
-    window.open('/project/download', '_blank');
 }
 
 async function importProject(file) {
@@ -414,6 +412,7 @@ async function loadModelData() {
             if (tabName === 'instructions') renderInstructionsTab();
             if (tabName === 'json') renderJsonTab();
             if (tabName === 'batches') renderBatchesTab();
+            if (tabName === 'diagram' && typeof renderDiagramTab === 'function') renderDiagramTab();
         }
         populateExportLayerFilters();
     } catch (e) {
@@ -794,6 +793,16 @@ function renderDecompResult(r) {
     var expandBtn = el('span', { className: 'result-expand', id: 'expand-' + r.dig_id, textContent: '\u2295' });
     headerRight.appendChild(expandBtn);
 
+    // Send to model button
+    if (!r.queued) {
+        var sendBtn = el('span', { className: 'result-send', title: 'Send to model queue', textContent: '\u279C' });
+        sendBtn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            sendToModel([r.dig_id]);
+        });
+        headerRight.appendChild(sendBtn);
+    }
+
     // Delete button
     var deleteBtn = el('span', { className: 'result-delete', title: 'Delete result', textContent: '\u00d7' });
     deleteBtn.addEventListener('click', function (e) {
@@ -929,7 +938,7 @@ async function sendToModel(digIds) {
         var res = await fetch('/decompose/send-to-model', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ dig_ids: digIds }),
+            body: JSON.stringify({ req_ids: digIds }),
         });
         if (res.ok) {
             showToast('Sent ' + digIds.length + ' DIG(s) to model queue', 'success');
@@ -1077,18 +1086,6 @@ function updateActiveModelDisplay(settings) {
         }
     }
     el.textContent = name;
-}
-
-// --- Provider selector ---
-function initProviderSelector(settings) {
-    var provider = (settings && settings.provider) || 'api';
-    setProvider(provider === 'local' ? 'local' : 'api');
-}
-
-function setProvider(uiProvider) {
-    document.querySelectorAll('#provider-selector .segment').forEach(function (btn) {
-        btn.classList.toggle('active', btn.getAttribute('data-provider') === uiProvider);
-    });
 }
 
 // --- Upload (model) ---
@@ -1249,7 +1246,7 @@ async function dismissFromQueue(ids) {
         await fetch('/model/dismiss', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ids: ids }),
+            body: JSON.stringify({ req_ids: ids }),
         });
         loadModelQueue();
     } catch (e) {
@@ -1262,7 +1259,7 @@ async function restoreToQueue(ids) {
         await fetch('/model/restore', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ids: ids }),
+            body: JSON.stringify({ req_ids: ids }),
         });
         loadModelQueue();
     } catch (e) {
@@ -1319,14 +1316,10 @@ function gatherModelSettings() {
     var cfg = window.SHIPYARD_CONFIG || {};
     var settings = cfg.settings || {};
 
-    var activeProvider = document.querySelector('#provider-selector .segment.active');
-    var provider = activeProvider ? activeProvider.getAttribute('data-provider') : 'api';
-
     return {
         mode: selectedToolMode,
         layers: selectedLayers.slice(),
         model: settings.mbse_model || settings.model || 'claude-sonnet-4-6',
-        provider: provider,
     };
 }
 
@@ -2394,12 +2387,6 @@ function renderMarkdownSafe(text) {
     return container;
 }
 
-// Legacy renderMarkdown kept for reference but not used for innerHTML
-function renderMarkdown(text) {
-    // Not used - see renderMarkdownSafe
-    return text;
-}
-
 function renderSuggestedPrompts(mode) {
     var container = $('suggested-prompts');
     if (!container) return;
@@ -2482,6 +2469,7 @@ function switchTab(tabName) {
     if (tabName === 'instructions') renderInstructionsTab();
     if (tabName === 'json') renderJsonTab();
     if (tabName === 'batches') renderBatchesTab();
+    if (tabName === 'diagram' && typeof renderDiagramTab === 'function') renderDiagramTab();
 }
 
 // =============================================================================
@@ -2649,13 +2637,35 @@ async function toggleAutoSend() {
     }
 }
 
+function handleUpdateBtn() {
+    var btn = $('settings-update-btn');
+    if (btn && btn.textContent.indexOf('Install') !== -1) {
+        installUpdate();
+    } else {
+        checkForUpdates();
+    }
+}
+
 async function checkForUpdates() {
+    var settingsStatus = $('settings-update-status');
+    var btn = $('settings-update-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Checking...'; }
+
     try {
         var res = await fetch('/settings/check-updates');
-        if (!res.ok) return;
+        if (!res.ok) {
+            if (settingsStatus) settingsStatus.textContent = 'Check failed (server error)';
+            if (btn) { btn.disabled = false; btn.textContent = 'Check for Updates'; }
+            return;
+        }
         var data = await res.json();
 
-        var settingsStatus = $('settings-update-status');
+        if (data.error) {
+            if (settingsStatus) settingsStatus.textContent = data.error;
+            if (btn) { btn.disabled = false; btn.textContent = 'Check for Updates'; }
+            return;
+        }
+
         if (data.available) {
             var banner = $('update-banner');
             var versionEl = $('update-version');
@@ -2663,16 +2673,18 @@ async function checkForUpdates() {
             if (versionEl) versionEl.textContent = data.version || ('v' + data.behind + ' update(s)');
 
             if (settingsStatus) settingsStatus.textContent = data.behind + ' update(s) available';
+            if (btn) { btn.disabled = false; btn.textContent = 'Install Update'; }
 
             // Add update dot to settings gear icon
             var settingsBtn = document.querySelector('[onclick="openSettings()"]');
             if (settingsBtn) settingsBtn.classList.add('has-update');
         } else {
             if (settingsStatus) settingsStatus.textContent = 'Up to date';
+            if (btn) { btn.disabled = false; btn.textContent = 'Check for Updates'; }
         }
     } catch (e) {
-        var settingsStatus = $('settings-update-status');
         if (settingsStatus) settingsStatus.textContent = 'Check failed';
+        if (btn) { btn.disabled = false; btn.textContent = 'Check for Updates'; }
     }
 }
 
@@ -2790,11 +2802,6 @@ function submitClarifications() {
 // 13. DRAG-DROP HANDLERS
 // =============================================================================
 
-function initDragDrop() {
-    // Both upload areas share the same dragover/dragleave pattern
-    // The specific drop handlers are wired in HTML via ondrop
-}
-
 function handleDragOver(e) {
     e.preventDefault();
     var area = e.currentTarget;
@@ -2853,19 +2860,6 @@ function exportProject(format) {
     var queryStr = checkedLayers.length > 0 ? '?layers=' + checkedLayers.join(',') : '';
     window.open('/export/model/' + format + queryStr, '_blank');
     $('export-menu').classList.add('hidden');
-}
-
-function openPrintView() {
-    window.open('/export/print', '_blank');
-    $('export-menu').classList.add('hidden');
-}
-
-function exportDecomposition() {
-    window.location = '/export/decomposition';
-}
-
-function exportFullProject() {
-    window.location = '/export/full';
 }
 
 // =============================================================================

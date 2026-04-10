@@ -27,10 +27,6 @@ DEFAULT_MODE = os.getenv("DEFAULT_MODE", "capella")  # "capella" or "rhapsody"
 DECOMPOSE_MODEL = os.getenv("DECOMPOSE_MODEL", "claude-sonnet-4-6")
 MBSE_MODEL = os.getenv("MBSE_MODEL", "claude-sonnet-4-6")
 
-# Decomposition defaults
-DEFAULT_MAX_DEPTH = 4
-DEFAULT_MAX_BREADTH = 3
-
 # Level names for requirements decomposition
 LEVEL_NAMES = {
     1: "Whole Ship",

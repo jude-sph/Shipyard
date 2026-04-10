@@ -32,7 +32,6 @@ from src.core.project import (
     delete_project,
     push_undo,
     pop_undo,
-    push_redo,
     pop_redo,
 )
 
@@ -106,14 +105,6 @@ def _reload_config():
     config.DECOMPOSE_MODEL = os.getenv("DECOMPOSE_MODEL", "claude-sonnet-4-6")
     config.MBSE_MODEL = os.getenv("MBSE_MODEL", "claude-sonnet-4-6")
     config.LOCAL_LLM_URL = os.getenv("LOCAL_LLM_URL", "http://localhost:11434")
-
-
-def _slugify(name: str) -> str:
-    import re
-    slug = re.sub(r'[^a-z0-9]+', name.lower(), '').strip('-')
-    # Use the same logic as project module
-    from src.core.project import _slugify as project_slugify
-    return project_slugify(name)
 
 
 def _require_project() -> ProjectModel:
@@ -357,16 +348,11 @@ async def update_settings(request: Request):
     # Write to CWD .env (takes precedence), fall back to package root
     env_path = config.CWD / ".env" if (config.CWD / ".env").exists() else config.PACKAGE_ROOT / ".env"
 
-    # Auto-detect provider from the selected models via catalogue
-    def _provider_for(model_id):
-        for m in MODEL_CATALOGUE:
-            if m["id"] == model_id:
-                return m["provider"]
-        return "openrouter" if "/" in model_id else "anthropic"
+    from src.core.llm_client import _provider_for_model
 
     decompose_model = body.get('decompose_model', config.DECOMPOSE_MODEL)
     mbse_model = body.get('mbse_model', config.MBSE_MODEL)
-    provider = body.get('provider', _provider_for(mbse_model))
+    provider = body.get('provider', _provider_for_model(mbse_model))
 
     lines = [
         "# Shipyard Configuration",
