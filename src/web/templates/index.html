@@ -211,16 +211,12 @@
                     <div id="req-preview-list" class="req-preview-list"></div>
                 </div>
 
-                <!-- Options -->
-                <div class="sidebar-section" style="padding-top:0;">
-                    <label class="layer-checkbox" style="font-size:11px;color:#888;">
-                        <input type="checkbox" id="skip-instruct" style="margin-right:4px;">
-                        Skip recreation instructions (faster)
-                    </label>
-                </div>
-
                 <!-- Generate Button -->
                 <div class="sidebar-section">
+                    <label class="layer-checkbox" style="font-size:11px;color:#666;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+                        <input type="checkbox" id="skip-instruct">
+                        Skip recreation instructions (faster)
+                    </label>
                     <button id="generate-btn" class="btn-generate" onclick="startModelBatch()" disabled>
                         &#9654; Add Batch
                     </button>
