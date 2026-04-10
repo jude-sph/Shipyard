@@ -235,7 +235,7 @@ function buildOADiagram(layer, links) {
         var src = idMap[i.source_entity] || sanitizeId(i.source_entity);
         var tgt = idMap[i.target_entity] || sanitizeId(i.target_entity);
         if (src && tgt && src !== tgt) {
-            lines.push('    ' + src + ' -->|"' + sanitizeLabel(i.name, 30) + '"| ' + tgt);
+            lines.push('    ' + src + ' -->|"' + sanitizeLabel(i.name, 50) + '"| ' + tgt);
         }
     });
 
@@ -243,7 +243,7 @@ function buildOADiagram(layer, links) {
         var src = idMap[c.source_entity] || sanitizeId(c.source_entity);
         var tgt = idMap[c.target_entity] || sanitizeId(c.target_entity);
         if (src && tgt && src !== tgt) {
-            lines.push('    ' + src + ' -.-|"' + sanitizeLabel(c.name, 30) + '"| ' + tgt);
+            lines.push('    ' + src + ' -.-|"' + sanitizeLabel(c.name, 50) + '"| ' + tgt);
         }
     });
 
@@ -289,7 +289,7 @@ function buildSADiagram(layer, links) {
         var src = idMap[ex.source] || sanitizeId(ex.source);
         var tgt = idMap[ex.target] || sanitizeId(ex.target);
         if (src && tgt && src !== tgt) {
-            lines.push('    ' + src + ' -->|"' + sanitizeLabel(ex.name, 30) + '"| ' + tgt);
+            lines.push('    ' + src + ' -->|"' + sanitizeLabel(ex.name, 50) + '"| ' + tgt);
         }
     });
 
@@ -336,7 +336,7 @@ function buildArchDiagram(layer, links, variant) {
             fns.forEach(function (f) {
                 var fid = sanitizeId(f.id);
                 fnIdMap[f.id] = fid;
-                lines.push('        ' + fid + '("' + sanitizeLabel(f.name, 30) + '")');
+                lines.push('        ' + fid + '("' + sanitizeLabel(f.name, 45) + '")');
             });
             lines.push('    end');
         } else {
@@ -349,7 +349,7 @@ function buildArchDiagram(layer, links, variant) {
         if (!fnIdMap[f.id]) {
             var fid = sanitizeId(f.id);
             fnIdMap[f.id] = fid;
-            lines.push('    ' + fid + '("' + sanitizeLabel(f.name, 30) + '")');
+            lines.push('    ' + fid + '("' + sanitizeLabel(f.name, 45) + '")');
         }
     });
 
@@ -357,7 +357,7 @@ function buildArchDiagram(layer, links, variant) {
         var src = compIdMap[ex.source_component] || sanitizeId(ex.source_component);
         var tgt = compIdMap[ex.target_component] || sanitizeId(ex.target_component);
         if (src && tgt && src !== tgt) {
-            lines.push('    ' + src + ' <-->|"' + sanitizeLabel(ex.name, 30) + '"| ' + tgt);
+            lines.push('    ' + src + ' <-->|"' + sanitizeLabel(ex.name, 50) + '"| ' + tgt);
         }
     });
 
@@ -520,7 +520,7 @@ function buildStateDiagram(layer) {
         var tgt = tgtState && tgtState.type === 'Final' ? '[*]' : sanitizeId(t.target);
 
         var label = '';
-        if (t.trigger) label = sanitizeLabel(t.trigger, 30);
+        if (t.trigger) label = sanitizeLabel(t.trigger, 45);
         if (t.guard) label += (label ? ' ' : '') + '[' + sanitizeLabel(t.guard, 20) + ']';
 
         lines.push('    ' + src + ' --> ' + tgt + (label ? ' : ' + label : ''));
@@ -576,6 +576,24 @@ function wireDiagramClickHandlers(container, layerKey, layerData) {
             e.stopPropagation();
             showDiagramTooltip(e, data);
         });
+    });
+
+    // Add hover titles to edge labels so truncated text can be read
+    container.querySelectorAll('.edgeLabel text, .edgeLabel span').forEach(function (labelEl) {
+        var text = labelEl.textContent.trim();
+        if (text && text.indexOf('\u2026') !== -1) {
+            // Find the full name from lookup
+            var fullName = null;
+            Object.keys(lookup).forEach(function (k) {
+                var item = lookup[k];
+                if (item && item.name && sanitizeLabel(item.name, 50).replace(/\u2026$/, '') === text.replace(/\u2026$/, '')) {
+                    fullName = item.name;
+                }
+            });
+            var titleEl = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+            titleEl.textContent = fullName || text;
+            labelEl.appendChild(titleEl);
+        }
     });
 
     // Click container to dismiss tooltip — use AbortController to prevent listener accumulation
