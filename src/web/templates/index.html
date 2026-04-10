@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Shipyard</title>
     <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
 </head>
 <body>
 
@@ -12,7 +13,7 @@
     <header id="top-bar">
         <div class="header-left">
             <span class="logo">&#9875; Shipyard</span>
-            <span class="version">v1.3.1</span>
+            <span class="version">v1.4.0</span>
             <!-- Mode tabs -->
             <div class="mode-tabs">
                 <button class="mode-tab active" data-mode="decompose" onclick="switchMode('decompose')">Decompose</button>
@@ -245,6 +246,7 @@
                         <button class="tab-btn" data-tab="instructions" onclick="switchTab('instructions')">Instructions</button>
                         <button class="tab-btn" data-tab="json" onclick="switchTab('json')">Raw JSON</button>
                         <button class="tab-btn" data-tab="batches" onclick="switchTab('batches')">Batches</button>
+                        <button class="tab-btn" data-tab="diagram" onclick="switchTab('diagram')">Diagram</button>
                     </div>
                     <div class="tab-actions">
                         <div class="export-dropdown">
@@ -256,8 +258,6 @@
                                 <button onclick="exportProject('json')">Export JSON</button>
                                 <button onclick="exportProject('xlsx')">Export XLSX</button>
                                 <button onclick="exportProject('text')">Export Text</button>
-                                <div class="export-divider"></div>
-                                <button onclick="openPrintView()">Presentation View</button>
                             </div>
                         </div>
                     </div>
@@ -292,6 +292,9 @@
                     </div>
                     <div id="tab-batches" class="tab-pane" style="display:none">
                         <div id="batch-list" class="batch-list"></div>
+                    </div>
+                    <div id="tab-diagram" class="tab-pane" style="display:none; position:relative;">
+                        <!-- Populated by diagram.js -->
                     </div>
                 </div>
 
@@ -426,7 +429,7 @@
                 <div class="form-group" style="border-top: 1px solid var(--border); padding-top: 16px; margin-top: 8px;">
                     <label>Software Update</label>
                     <div style="display: flex; gap: 8px; align-items: center;">
-                        <button class="btn-secondary" onclick="checkForUpdates()" id="settings-update-btn">Check for Updates</button>
+                        <button class="btn-secondary" onclick="handleUpdateBtn()" id="settings-update-btn">Check for Updates</button>
                         <small id="settings-update-status"></small>
                     </div>
                 </div>
@@ -558,6 +561,7 @@
         };
     </script>
     <script src="/static/app.js"></script>
+    <script src="/static/diagram.js"></script>
 
 </body>
 </html>
