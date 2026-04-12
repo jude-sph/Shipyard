@@ -547,11 +547,19 @@ async def update_software():
                 "updated": False,
             }
 
-        subprocess.run(
+        pip_result = subprocess.run(
             [sys.executable, "-m", "pip", "install", "-e", ".", "-q"],
             capture_output=True, text=True,
             cwd=repo_root, timeout=60,
         )
+        if pip_result.returncode != 0:
+            logger.warning(f"pip install failed: {pip_result.stderr}")
+            return {
+                "status": "ok",
+                "message": "Code updated but pip install failed. Run 'pip install -e .' manually, then restart.",
+                "updated": True,
+                "details": pip_result.stderr.strip(),
+            }
 
         return {
             "status": "ok",
