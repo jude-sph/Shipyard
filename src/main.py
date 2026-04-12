@@ -1,5 +1,12 @@
 import argparse
+import os
+import sys
 import uvicorn
+
+# Ensure we import from our own package, not a CWD `src/` from another project
+_PACKAGE_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if sys.path[0] != _PACKAGE_ROOT:
+    sys.path.insert(0, _PACKAGE_ROOT)
 
 
 def main():
