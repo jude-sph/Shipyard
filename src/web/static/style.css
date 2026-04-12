@@ -354,12 +354,30 @@ body {
 .upload-primary { color: #aaa; font-size: 13px; margin-bottom: 4px; }
 .upload-secondary { color: var(--text-muted); font-size: 11px; }
 
-.upload-info-icon {
-    display: inline-block; cursor: help;
-    color: #555; font-size: 14px; margin-left: 4px;
-    vertical-align: middle;
+.upload-info-btn {
+    display: inline-block; cursor: pointer;
+    color: #555; font-size: 11px; margin-left: 6px;
+    padding: 1px 6px; border: 1px solid #2a2a4a; border-radius: 3px;
+    vertical-align: middle; transition: all 0.15s;
 }
-.upload-info-icon:hover { color: var(--accent); }
+.upload-info-btn:hover { color: var(--accent); border-color: var(--accent); background: #111128; }
+
+.format-table {
+    width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 12px;
+}
+.format-table th {
+    text-align: left; padding: 6px 10px; color: var(--accent);
+    border-bottom: 1px solid var(--border); font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+}
+.format-table td {
+    padding: 6px 10px; border-bottom: 1px solid var(--border-light);
+    color: var(--text-secondary); font-size: 12px;
+}
+.format-table tr:last-child td { border-bottom: none; }
+.format-table td:first-child { color: var(--text-primary); font-weight: 500; font-family: monospace; font-size: 11px; }
+
+.format-note { color: var(--text-muted); font-size: 11px; margin-top: 8px; font-style: italic; }
 
 /* File status & actions */
 .file-status {

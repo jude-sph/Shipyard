@@ -70,7 +70,7 @@
                                style="display:none" onchange="handleDecompUpload(this)">
                         <div id="decomp-upload-text">
                             &#128194; Upload a GTR-SDS reference workbook to enable decomposition
-                            <span class="upload-info-icon" title="Required: XLSX workbook with sheets: Requirements Decomposition (Col A: DIG ID, Col B: DIG text), System Hierarchy, GTR Chapters, SDS Chapters, Acceptance Phases, Verification Events, Verification Means. Row 1 is headers.">&#9432;</span>
+                            <span class="upload-info-btn" onclick="event.stopPropagation(); showFormatHelp('decompose')">&#9432; Format</span>
                         </div>
                     </div>
                     <div id="decomp-file-actions" class="file-actions hidden">
@@ -192,7 +192,7 @@
                         <div class="upload-icon">&#128196;</div>
                         <div class="upload-primary">Drop XLSX or CSV here</div>
                         <div class="upload-secondary">or click to browse
-                            <span class="upload-info-icon" title="Accepts XLSX, XLS, or CSV with columns for ID (id, req_id, node_id, dng) and Text (text, technical_requirement, requirement, description). Column order doesn't matter. Missing IDs are auto-generated.">&#9432;</span>
+                            <span class="upload-info-btn" onclick="event.stopPropagation(); showFormatHelp('model')">&#9432; Format</span>
                         </div>
                         <input type="file" id="model-file-input" accept=".xlsx,.xls,.csv"
                                style="display:none" onchange="handleModelFileSelect(this)">
@@ -549,6 +549,17 @@
 
     <!-- Toast Container -->
     <div id="toast-container" class="toast-container"></div>
+
+    <!-- Format Help Modal -->
+    <div id="format-help-modal" class="modal hidden">
+        <div class="modal-content" style="max-width:560px;">
+            <div class="modal-header">
+                <h3 id="format-help-title"></h3>
+                <button class="modal-close" onclick="$('format-help-modal').classList.add('hidden')">&times;</button>
+            </div>
+            <div class="modal-body" id="format-help-body"></div>
+        </div>
+    </div>
 
     <!-- Keyboard shortcut hints -->
     <div class="shortcut-bar">
