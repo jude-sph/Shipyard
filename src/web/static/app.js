@@ -2806,6 +2806,94 @@ function submitClarifications() {
 // 13. DRAG-DROP HANDLERS
 // =============================================================================
 
+function showFormatHelp(type) {
+    var modal = $('format-help-modal');
+    var title = $('format-help-title');
+    var body = $('format-help-body');
+    if (!modal || !body) return;
+    clearChildren(body);
+
+    if (type === 'decompose') {
+        title.textContent = 'Decompose Upload Format';
+        var html = el('div');
+        html.appendChild(el('p', { textContent: 'Upload an XLSX workbook with the following sheets:' }));
+
+        var table = document.createElement('table');
+        table.className = 'format-table';
+        var thead = document.createElement('thead');
+        var hr = document.createElement('tr');
+        ['Sheet Name', 'Columns', 'Required'].forEach(function (h) {
+            var th = document.createElement('th');
+            th.textContent = h;
+            hr.appendChild(th);
+        });
+        thead.appendChild(hr);
+        table.appendChild(thead);
+
+        var tbody = document.createElement('tbody');
+        var sheets = [
+            ['Requirements Decomposition', 'Col A: DIG ID (numeric), Col B: DIG text', 'Yes'],
+            ['System Hierarchy', 'Col A: hierarchy entry ID', 'Yes'],
+            ['GTR Chapters', 'Col A: chapter code (GTR-Ch prefix)', 'Yes'],
+            ['SDS Chapters', 'Col A: chapter code (SDS-Ch prefix)', 'Yes'],
+            ['Acceptance Phases', 'Col A: phase text', 'Yes'],
+            ['Verification Events', 'Col A: method name, Col B: description', 'Yes'],
+            ['Verification Means', 'Col A: event name, Col B: description', 'Yes'],
+        ];
+        sheets.forEach(function (s) {
+            var tr = document.createElement('tr');
+            s.forEach(function (cell) {
+                var td = document.createElement('td');
+                td.textContent = cell;
+                tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        html.appendChild(table);
+        html.appendChild(el('p', { textContent: 'Row 1 in each sheet is treated as headers and skipped.', className: 'format-note' }));
+        body.appendChild(html);
+    } else {
+        title.textContent = 'Model Upload Format';
+        var html = el('div');
+        html.appendChild(el('p', { textContent: 'Upload an XLSX, XLS, or CSV file with requirements. The parser auto-detects columns by header name:' }));
+
+        var table = document.createElement('table');
+        table.className = 'format-table';
+        var thead = document.createElement('thead');
+        var hr = document.createElement('tr');
+        ['Column', 'Accepted Header Names', 'Required'].forEach(function (h) {
+            var th = document.createElement('th');
+            th.textContent = h;
+            hr.appendChild(th);
+        });
+        thead.appendChild(hr);
+        table.appendChild(thead);
+
+        var tbody = document.createElement('tbody');
+        var cols = [
+            ['ID', 'id, node_id, req_id, requirement_id, dng', 'No (auto-generated)'],
+            ['Text', 'text, technical_requirement, requirement_text, requirement, dig text, description', 'Yes'],
+            ['Source', 'source_dig, dig_id, dig, dng, source', 'No (defaults to ID)'],
+        ];
+        cols.forEach(function (c) {
+            var tr = document.createElement('tr');
+            c.forEach(function (cell) {
+                var td = document.createElement('td');
+                td.textContent = cell;
+                tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        html.appendChild(table);
+        html.appendChild(el('p', { textContent: 'Column order does not matter. The header row is auto-detected.', className: 'format-note' }));
+        body.appendChild(html);
+    }
+
+    modal.classList.remove('hidden');
+}
+
 function handleDragOver(e) {
     e.preventDefault();
     var area = e.currentTarget;
