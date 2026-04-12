@@ -547,11 +547,17 @@ async def update_software():
                 "updated": False,
             }
 
+        logger.info(f"Running pip install with: {sys.executable} in {repo_root}")
         pip_result = subprocess.run(
-            [sys.executable, "-m", "pip", "install", "-e", ".", "-q"],
+            [sys.executable, "-m", "pip", "install", "-e", "."],
             capture_output=True, text=True,
             cwd=repo_root, timeout=60,
         )
+        logger.info(f"pip install returncode: {pip_result.returncode}")
+        if pip_result.stdout:
+            logger.info(f"pip stdout: {pip_result.stdout[-500:]}")
+        if pip_result.stderr:
+            logger.warning(f"pip stderr: {pip_result.stderr[-500:]}")
         if pip_result.returncode != 0:
             logger.warning(f"pip install failed: {pip_result.stderr}")
             return {
