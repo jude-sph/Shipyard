@@ -354,6 +354,13 @@ body {
 .upload-primary { color: #aaa; font-size: 13px; margin-bottom: 4px; }
 .upload-secondary { color: var(--text-muted); font-size: 11px; }
 
+.upload-info-icon {
+    display: inline-block; cursor: help;
+    color: #555; font-size: 14px; margin-left: 4px;
+    vertical-align: middle;
+}
+.upload-info-icon:hover { color: var(--accent); }
+
 /* File status & actions */
 .file-status {
     display: flex;

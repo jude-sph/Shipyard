@@ -70,6 +70,7 @@
                                style="display:none" onchange="handleDecompUpload(this)">
                         <div id="decomp-upload-text">
                             &#128194; Upload a GTR-SDS reference workbook to enable decomposition
+                            <span class="upload-info-icon" title="Required: XLSX workbook with sheets: Requirements Decomposition (Col A: DIG ID, Col B: DIG text), System Hierarchy, GTR Chapters, SDS Chapters, Acceptance Phases, Verification Events, Verification Means. Row 1 is headers.">&#9432;</span>
                         </div>
                     </div>
                     <div id="decomp-file-actions" class="file-actions hidden">
@@ -190,7 +191,9 @@
                          ondrop="handleModelDrop(event)">
                         <div class="upload-icon">&#128196;</div>
                         <div class="upload-primary">Drop XLSX or CSV here</div>
-                        <div class="upload-secondary">or click to browse</div>
+                        <div class="upload-secondary">or click to browse
+                            <span class="upload-info-icon" title="Accepts XLSX, XLS, or CSV with columns for ID (id, req_id, node_id, dng) and Text (text, technical_requirement, requirement, description). Column order doesn't matter. Missing IDs are auto-generated.">&#9432;</span>
+                        </div>
                         <input type="file" id="model-file-input" accept=".xlsx,.xls,.csv"
                                style="display:none" onchange="handleModelFileSelect(this)">
                     </div>
