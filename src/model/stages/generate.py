@@ -37,7 +37,7 @@ def generate_layer(mode: str, layer_key: str, requirements: list[Requirement], t
 
     prompt = template.format(requirements=reqs_json, existing_elements=existing_ctx)
     return call_llm(prompt=prompt, cost_tracker=tracker, call_type="generate",
-                    stage=f"generate_{layer_key}", client=client, model=model)
+                    stage=f"generate_{layer_key}", max_tokens=8192, client=client, model=model)
 
 
 def _format_existing_elements(layer_data: dict) -> str:

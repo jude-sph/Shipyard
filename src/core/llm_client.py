@@ -164,6 +164,65 @@ def _extract_json(text: str) -> str:
     text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', text)
     # Remove trailing commas before } or ]
     text = re.sub(r',\s*([}\]])', r'\1', text)
+    # Attempt to repair truncated JSON (output hit max_tokens mid-string)
+    text = _repair_truncated_json(text)
+    return text
+
+
+def _repair_truncated_json(text: str) -> str:
+    """Try to close unclosed strings, arrays, and objects in truncated JSON."""
+    try:
+        json.loads(text)
+        return text  # already valid
+    except json.JSONDecodeError:
+        pass
+
+    # Close any unterminated string
+    # Count unescaped quotes — if odd, the last string is unterminated
+    in_string = False
+    i = 0
+    while i < len(text):
+        c = text[i]
+        if c == '\\' and in_string:
+            i += 2  # skip escaped char
+            continue
+        if c == '"':
+            in_string = not in_string
+        i += 1
+
+    if in_string:
+        text += '"'
+
+    # Close unclosed brackets/braces
+    open_stack = []
+    in_str = False
+    i = 0
+    while i < len(text):
+        c = text[i]
+        if c == '\\' and in_str:
+            i += 2
+            continue
+        if c == '"':
+            in_str = not in_str
+        elif not in_str:
+            if c in '{[':
+                open_stack.append('}' if c == '{' else ']')
+            elif c in '}]' and open_stack:
+                open_stack.pop()
+        i += 1
+
+    # Remove any trailing comma before closing
+    text = text.rstrip().rstrip(',')
+    # Close in reverse order
+    text += ''.join(reversed(open_stack))
+
+    # Verify the repair worked
+    try:
+        json.loads(text)
+        logger.warning("Repaired truncated JSON (output likely hit max_tokens limit)")
+    except json.JSONDecodeError:
+        pass  # repair didn't help — let the caller handle the error
+
     return text
 
 

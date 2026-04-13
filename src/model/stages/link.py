@@ -37,4 +37,4 @@ def generate_links(mode: str, layers: dict, requirements: list[Requirement], tra
         mode=mode,
         existing_links=existing_links_context,
     )
-    return call_llm(prompt=prompt, cost_tracker=tracker, call_type="link", stage="link", client=client, model=model)
+    return call_llm(prompt=prompt, cost_tracker=tracker, call_type="link", stage="link", max_tokens=8192, client=client, model=model)
