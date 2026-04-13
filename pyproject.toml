@@ -19,6 +19,7 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "python-multipart>=0.0.5",
     "tqdm>=4.60.0",
+    "capellambse>=0.8.0",
 ]
 
 [project.optional-dependencies]

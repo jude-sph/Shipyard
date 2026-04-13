@@ -1513,6 +1513,39 @@ async def export_decomposition():
     return FileResponse(tmp_path, filename=filename, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 
+@app.get("/export/model/capella")
+async def export_capella(mode: str = "project"):
+    """Export MBSE model as native Capella project."""
+    project = _require_project()
+
+    if not project.layers:
+        raise HTTPException(400, "No model layers to export")
+
+    if project.project.mode != "capella":
+        raise HTTPException(400, "Capella export only available for Capella-mode projects")
+
+    from src.core.capella_export import export_capella_project, export_capella_fragment
+
+    try:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            if mode == "fragment":
+                result = export_capella_fragment(project, tmp_path)
+                media_type = "application/xml"
+            else:
+                result = export_capella_project(project, tmp_path)
+                media_type = "application/zip"
+
+            return FileResponse(
+                result,
+                filename=result.name,
+                media_type=media_type,
+            )
+    except Exception as exc:
+        logger.error(f"Capella export failed: {exc}")
+        raise HTTPException(500, f"Export failed: {exc}")
+
+
 @app.get("/export/model/{fmt}")
 async def export_model(fmt: str):
     """Export MBSE model (json/xlsx/text)."""

@@ -83,6 +83,7 @@ document.addEventListener('DOMContentLoaded', function () {
     updateActiveModelDisplay(cfg.settings);
     renderSuggestedPrompts(currentMode);
     checkForUpdates();
+    updateCapellaExportVisibility();
 
     // If a project is loaded, refresh everything
     if (currentProject && currentProject.slug) {
@@ -1064,6 +1065,7 @@ function confirmModeSwitch() {
 
 function applyToolMode(mode) {
     selectedToolMode = mode;
+    updateCapellaExportVisibility();
     document.querySelectorAll('#mode-toggle .segment').forEach(function (btn) {
         btn.classList.toggle('active', btn.getAttribute('data-mode') === mode);
     });
@@ -2952,6 +2954,21 @@ function exportProject(format) {
     var queryStr = checkedLayers.length > 0 ? '?layers=' + checkedLayers.join(',') : '';
     window.open('/export/model/' + format + queryStr, '_blank');
     $('export-menu').classList.add('hidden');
+}
+
+function exportCapella(mode) {
+    window.open('/export/model/capella?mode=' + mode, '_blank');
+    $('export-menu').classList.add('hidden');
+}
+
+function updateCapellaExportVisibility() {
+    var show = selectedToolMode === 'capella';
+    var divider = $('capella-export-divider');
+    var projBtn = $('capella-project-btn');
+    var fragBtn = $('capella-fragment-btn');
+    if (divider) divider.style.display = show ? '' : 'none';
+    if (projBtn) projBtn.style.display = show ? '' : 'none';
+    if (fragBtn) fragBtn.style.display = show ? '' : 'none';
 }
 
 // =============================================================================
