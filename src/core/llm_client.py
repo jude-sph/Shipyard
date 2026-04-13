@@ -9,6 +9,56 @@ from src.core import config
 
 logger = logging.getLogger(__name__)
 
+
+class LLMError(Exception):
+    """User-friendly LLM error with the original exception attached."""
+    def __init__(self, message: str, original: Exception | None = None):
+        super().__init__(message)
+        self.original = original
+
+
+def _friendly_error(exc: Exception, model: str, provider: str) -> LLMError:
+    """Convert raw API exceptions into user-friendly error messages."""
+    msg = str(exc).lower()
+    if '401' in msg or 'auth' in msg or 'invalid.*key' in msg:
+        return LLMError(
+            f"API key is invalid or missing for {provider}. Check your key in Settings.",
+            original=exc,
+        )
+    if '402' in msg or 'insufficient' in msg or 'credit' in msg or 'quota' in msg or 'billing' in msg:
+        return LLMError(
+            f"Insufficient credits or billing issue with {provider}. "
+            "Please top up your account or switch to a different model in Settings.",
+            original=exc,
+        )
+    if '429' in msg or 'rate' in msg:
+        return LLMError(
+            f"Rate limited by {provider}. Too many requests — wait a moment and try again, "
+            "or switch to a different model.",
+            original=exc,
+        )
+    if '404' in msg or 'not found' in msg or 'model' in msg and 'not' in msg:
+        return LLMError(
+            f"Model '{model}' not found on {provider}. "
+            "It may have been removed or the ID is incorrect. Check Settings.",
+            original=exc,
+        )
+    if 'timeout' in msg or 'timed out' in msg:
+        return LLMError(
+            f"Request to {provider} timed out. The model may be overloaded — try again.",
+            original=exc,
+        )
+    if 'connection' in msg or 'connect' in msg:
+        return LLMError(
+            f"Could not connect to {provider}. Check your internet connection.",
+            original=exc,
+        )
+    # Fallback — include the raw error but with context
+    return LLMError(
+        f"API error from {provider} using {model}: {exc}",
+        original=exc,
+    )
+
 MAX_RETRIES = 3
 RETRY_DELAYS = [2, 5, 10]
 
@@ -181,7 +231,7 @@ def call_llm(
                 time.sleep(delay)
             else:
                 logger.error(f"API call failed after {MAX_RETRIES} attempts: {e}")
-                raise
+                raise _friendly_error(e, model, provider) from e
         except (json.JSONDecodeError, ValueError) as e:
             if attempt < MAX_RETRIES - 1:
                 delay = RETRY_DELAYS[attempt]

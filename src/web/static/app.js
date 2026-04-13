@@ -3044,7 +3044,9 @@ function showError(msg) {
     if (banner && text) {
         text.textContent = msg;
         banner.classList.remove('hidden');
-        setTimeout(function () { banner.classList.add('hidden'); }, 10000);
+        // Longer display for API/credential errors so user can read the guidance
+        var duration = (msg.indexOf('Settings') !== -1 || msg.indexOf('credit') !== -1) ? 20000 : 10000;
+        setTimeout(function () { banner.classList.add('hidden'); }, duration);
     }
 }
 
