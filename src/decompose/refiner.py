@@ -40,7 +40,7 @@ def refine_tree(
     )
 
     try:
-        result = call_llm(prompt, cost_tracker, "refine", stage="refine", max_tokens=8192, model=model)
+        result = call_llm(prompt, cost_tracker, "refine", stage="refine", max_tokens=16384, model=model)
 
         refined_root = _parse_node(result.get("root", result))
         refined_tree = RequirementTree(

@@ -51,7 +51,7 @@ def run_semantic_judge(tree: RequirementTree, cost_tracker: CostTracker, model: 
     tree_json = tree.model_dump_json(indent=2, exclude={"validation", "cost"})
     prompt = format_judge_prompt(dig_id=tree.dig_id, dig_text=tree.dig_text, tree_json=tree_json)
     try:
-        result = call_llm(prompt, cost_tracker, "judge", stage="judge", model=model)
+        result = call_llm(prompt, cost_tracker, "judge", stage="judge", max_tokens=8192, model=model)
         issues = [ValidationIssue(severity=i.get("severity", "warning"), message=i.get("message", ""), node_path=i.get("node_path", "")) for i in result.get("issues", [])]
         review = SemanticReview(status=result.get("status", "flag"), issues=issues)
         logger.info(f"  Semantic judge: {review.status} ({len(issues)} issues)")
